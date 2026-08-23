@@ -34,10 +34,10 @@ Cada comando imprime un id. Copialos: van en `wrangler.toml`.
 # Base de datos
 npx wrangler d1 create brote
 
-# Caches. No hay AUTH_STATE: sin flujo OAuth propio no hay state ni
-# code_verifier que guardar (SDD §7.1).
+# Cache. No hay AUTH_STATE: sin flujo OAuth propio no hay state ni code_verifier
+# que guardar (SDD §7.1). Y no hay PAGES: el cache de HTML no entra en las 1.000
+# escrituras por día del plan gratuito (§9).
 npx wrangler kv namespace create CACHE
-npx wrangler kv namespace create PAGES
 
 # Fotos de tickets
 npx wrangler r2 bucket create brote-receipts
@@ -56,20 +56,30 @@ dominio real en `APP_URL`.
 
 ## 2. Cargar el esquema
 
+`schema.sql` es la línea de base y vive también como `migrations/0001_init.sql`. Se
+aplica con el sistema de migraciones, no a mano, así que el próximo cambio es un
+archivo nuevo y no una edición (`SDD.md` §13.1):
+
 ```bash
 # Local primero, para probar sin tocar producción
-npx wrangler d1 execute brote --local --file=./schema.sql
+npm run db:local
 
 # Producción
-npx wrangler d1 execute brote --remote --file=./schema.sql
-
-# Verificación
-npx wrangler d1 execute brote --remote --command="select name from sqlite_master where type='table'"
+npm run db:remote
 ```
 
-Las categorías predefinidas, los comercios y las unidades de medida se insertan
-como semilla en el mismo `schema.sql`. Si preferís separarlo, movelo a un
-`seed.sql` y corré el mismo comando.
+Verificación: 42 comandos y las 26 tablas.
+
+```bash
+npx wrangler d1 execute brote --local \
+  --command "select count(*) as tablas from sqlite_master where type='table'"
+npx wrangler d1 execute brote --local \
+  --command "select kind, count(*) from retailers group by kind"
+```
+
+Los diez comercios de fábrica se cargan con el esquema. **Cargarlos no los enciende**:
+las filas de `connections` se siembran al crear el hogar, encendidas las de `api` y
+apagadas las de `scrape` y `llm` (`SDD.md` §6.2).
 
 ---
 
@@ -120,9 +130,21 @@ persona entra y no tiene hogar; con solo el segundo, no llega ni al login.
 ## 4. Primer deploy
 
 ```bash
+npm install
+npm run typecheck      # sin errores de tipo
+npm test               # 32 tests: la matemática de §5 y el aislamiento de §13.3
 npm run build          # la SPA queda en dist/client
 npx wrangler deploy
 ```
+
+Antes de la primera vez, copiá la plantilla y completá los ids:
+
+```bash
+cp wrangler.example.toml wrangler.toml
+```
+
+`wrangler.toml` está en `.gitignore`: lleva ids de tu cuenta. La plantilla es la que
+se versiona.
 
 Comprobación mínima:
 
@@ -173,21 +195,37 @@ en D1 como serie histórica. No hay nada que diferir acá.
 
 ### Precios: el único que necesita cuidado
 
-Cada consulta a un comercio es un subrequest, y un Worker tiene 1000 subrequests y
-30 segundos de CPU por invocación. Dos reglas alcanzan para no acercarse nunca:
+Cada consulta a un comercio es un subrequest. **En el plan gratuito son 50 por
+invocación, no 1000**, y son 6 conexiones salientes simultáneas (§9). Ese es el número
+que manda el diseño del lote:
 
-**Trabajá por lote, no por catálogo completo.** En cada corrida atendé los N
-productos con la consulta más vieja, en vez de todos:
+**El lote se mide en PARES producto-comercio, no en productos.** Un producto seguido
+en seis comercios son seis subrequests, así que "40 productos" podían ser 240
+consultas: cinco veces el límite del plan gratuito. Lo que entra en una corrida son
+40 pares, que deja diez subrequests de margen:
 
 ```sql
-select * from watched_items
-where household_id = ?
-order by last_checked_at asc nulls first
-limit 40
+select w.id as item_id, u.retailer_id, u.url
+  from watched_items w
+  join item_urls u on u.item_id = w.id
+  join connections c
+    on c.household_id = w.household_id and c.retailer_id = u.retailer_id
+ where c.enabled = 1
+   and (w.last_checked_at is null
+        or w.last_checked_at < datetime('now',
+             case (select check_frequency from alert_prefs p
+                    where p.household_id = w.household_id)
+               when 'weekly' then '-7 days' else '-1 day' end))
+ order by w.last_checked_at asc nulls first
+ limit 40
 ```
 
-Con cuatro corridas por día y lotes de 40, cada producto se refresca al menos una
-vez al día sin importar cuántos haya en total.
+Dos cosas de esa query, las dos del diseño y no del límite: `connections.enabled = 1`
+es lo que hace que apagar una fuente apague de verdad las consultas (regla 6), y la
+cadencia del hogar es un filtro de elegibilidad, no un cron aparte (`SDD.md` §6.3).
+
+Con cuatro corridas por día y lotes de 40 pares, un hogar con veinte productos en seis
+comercios —120 pares— se refresca completo cada tres corridas, o sea menos de un día.
 
 **Aislá cada comercio.** `Promise.allSettled` con un límite de concurrencia, para
 que uno caído no arrastre a los demás:
@@ -293,12 +331,72 @@ producción.
 - **Migraciones**: `npx wrangler d1 migrations apply brote --remote`. `schema.sql` es
   la línea de base y no se edita para cambiar una base que ya existe (`SDD.md` §13.1).
 - **Backups de D1**: `npx wrangler d1 export brote --remote --output=brote-$(date +%F).sql`,
-  programado. D1 tiene time travel de 30 días, pero un export propio es barato.
+  programado. En el plan gratuito el Time Travel de D1 es de **7 días**, no 30 (§9):
+  razón de más para que el export propio sea una rutina y no un lujo.
+
+## 9. El plan gratuito, con los números reales
+
+Brote entra en el plan gratuito, pero **no con el diseño de la documentación
+anterior**: varios límites que estaban escritos acá eran los del plan pago. Los
+verificados contra la documentación de Cloudflare, agosto 2026:
+
+| Recurso | Plan gratuito | Plan pago | Dónde aprieta |
+|---|---|---|---|
+| Requests | 100.000/día | sin límite diario | Lejísimos para un hogar |
+| CPU por invocación | **10 ms** | hasta 5 min | Ver abajo: CPU no es tiempo de espera |
+| Subrequests por invocación | **50** | 1000 | **Manda el tamaño del lote de precios (§5)** |
+| Conexiones salientes simultáneas | **6** | 6 | El límite de concurrencia del `allSettled` |
+| Cron triggers | 5 | 250 | Usamos 4 |
+| Duración del cron (reloj) | 15 min | 15 min | De sobra |
+| KV lecturas | 100.000/día | por uso | De sobra |
+| KV **escrituras** | **1.000/día** | por uso | **Ver abajo: el cache de HTML no entra** |
+| KV almacenamiento | 1 GB | por uso | De sobra |
+| D1 consultas por invocación | **50** | 1000 | Hay que agrupar con `batch()` |
+| D1 tamaño por base | 500 MB | 10 GB | De sobra |
+| D1 Time Travel | **7 días** | 30 días | Por eso el export propio de §8 |
+| R2 | 10 GB gratis | por uso | Las fotos de tickets |
+
+**Los 10 ms de CPU asustan más de lo que aprietan.** CPU no cuenta el tiempo
+esperando una respuesta HTTP ni una query de D1: un cron que hace 40 fetches y espera
+está casi todo el tiempo sin usar CPU. Lo que sí gasta CPU es parsear: 40 respuestas
+JSON de VTEX entran, 240 páginas de HTML crudo no. Otra razón para preferir `api`
+sobre `scrape` (`SDD.md` §6.2).
+
+**Las 1.000 escrituras de KV por día son el límite que cambia el diseño.** El cache de
+HTML de páginas de producto —el binding `PAGES` que estaba en `wrangler.toml`— gastaba
+una escritura por página consultada: 40 pares × 4 corridas = 160 por día en el mejor
+caso, y mucho más con varios hogares. **Se saca del plan gratuito.** Los precios ya
+viven en D1 (`item_prices`), que es la fuente de verdad; KV queda para lo que de
+verdad se escribe poco:
+
+| Qué se escribe en KV | Escrituras por día |
+|---|---|
+| Cotizaciones BNA + xe | ~6 (tres monedas × dos fuentes) |
+| IPC | 1 por mes |
+| **Total** | **menos de 10** |
+
+Y el JWKS de Access no va a KV: se cachea en memoria del isolate por una hora
+(`src/worker/access.ts`), que no gasta ninguna cuota.
+
+**Cloudflare Access tiene plan gratuito** y es lo que autentica a Brote. La cantidad
+de asientos incluidos no la pude confirmar en la documentación pública, así que
+**verificalo en el panel de Zero Trust antes de contar con él** — para un hogar
+alcanza cualquiera de los tramos, pero es el único número de esta tabla que no está
+verificado.
+
+### Cuándo se sale del plan gratuito
+
+- **Muchos hogares con muchos productos**: el techo real no son los requests, son los
+  50 subrequests por corrida. Con más hogares, cada uno se refresca menos seguido. La
+  salida no es pagar: es bajar la cadencia (§6.3) antes que el lote.
+- **OCR de tickets**: no es de Cloudflare. Cohere se cobra por imagen y es el único
+  renglón que cuesta desde el primer ticket.
+- **Queues**: si el lote deja de entrar, son 5 USD/mes del plan Workers Paid. Con
+  lotes de 40 pares y cuatro corridas no hace falta.
+
+---
 
 ## Costo esperado
 
-Para un puñado de hogares: **cero**. Cron triggers (hasta 5), D1, KV y R2 tienen
-tier gratuito, y el límite de 100.000 requests por día queda lejísimos. El único
-renglón real es el OCR de tickets, que se cobra por imagen según el proveedor.
-
-Si más adelante aparece Queues, son 5 USD/mes del plan Workers Paid.
+Para un hogar: **cero de Cloudflare**, con el diseño de §9. El único renglón real es
+el OCR de tickets, que se cobra por imagen.

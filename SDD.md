@@ -678,7 +678,7 @@ servidor: el cliente no recalcula inflación (ver `api-contract.md`).
 | Cotización de referencia | xe.com | diaria | 26 h | `fx_rates` |
 | IPC | INDEC | mensual, día 15 | 40 d | `inflation` |
 | Precios de productos | comercio por comercio | cada 6 h | 7 h | `item_prices` |
-| HTML de páginas de producto | el comercio | por consulta | 6 h | — (solo cache) |
+| HTML de páginas de producto | el comercio | por consulta | **no se cachea en el plan gratuito** | — |
 
 **El TTL siempre es mayor que el intervalo de refresco.** Con TTL 12 h y refresco
 diario había doce horas por día en las que la entrada de KV ya no estaba y el camino
@@ -753,9 +753,11 @@ momento. Si sale bien, `verified = 1`. Si no, el comercio queda cargado pero
 apagado, con `verify_note` explicando qué pasó — la UI ya tiene ese estado
 ("Verificando el sitio…" y después el resultado).
 
-Costo: una llamada al modelo por producto por comercio por corrida. Con lotes de 40
-y cuatro corridas diarias es acotado, pero conviene cachear el HTML por unas horas
-en KV para no pagar dos veces la misma página.
+Costo: una llamada al modelo por producto por comercio por corrida. Cachear el HTML en
+KV para no pagar dos veces la misma página era la idea obvia y **no entra en el plan
+gratuito**: son 1.000 escrituras de KV por día y una por página consultada se las come
+(`DEPLOY.md` §9). En gratuito no se cachea el HTML; si algún día se paga el plan, el
+cache vuelve con TTL de 6 h.
 
 ### 6.2 Qué vía usa cada comercio de fábrica
 
@@ -1107,8 +1109,8 @@ detalles de deploy.
 
 ### 13.1 Migraciones del esquema
 
-`schema.sql` es la línea de base de la v1 y se aplica una sola vez, en una base
-vacía. Todo cambio posterior es un archivo nuevo en `migrations/NNNN-nombre.sql`,
+`schema.sql` es la línea de base de la v1 y vive también como
+`migrations/0001_init.sql`, que es la forma en que se aplica. Todo cambio posterior es un archivo nuevo en `migrations/NNNN-nombre.sql`,
 numerado, **solo hacia adelante**, aplicado con
 `npx wrangler d1 migrations apply brote`. No se edita una migración ya aplicada y no
 se edita `schema.sql` para cambiar una base que ya existe: se agrega la migración y
@@ -1222,11 +1224,15 @@ prototipo y en `DEPLOY.md`).
 
 - **Latencia**: p75 de los endpoints de lectura por debajo de 300 ms de tiempo de
   servidor. Todos leen de D1 o KV; ninguno sale a la red (§6).
-- **Corrida de cron**: bien lejos de los 1000 subrequests y 30 s de CPU por
-  invocación. El lote de 40 con timeout por comercio es lo que lo garantiza
-  (`DEPLOY.md` §5).
+- **Corrida de cron**: los límites que importan son los del **plan gratuito** —50
+  subrequests, 50 consultas de D1 y 6 conexiones salientes simultáneas por
+  invocación—, no los del pago (`DEPLOY.md` §9). Por eso el lote se mide en **pares
+  producto-comercio** y son 40: un producto en seis comercios son seis subrequests, y
+  "40 productos" habrían sido 240. Los 10 ms de CPU no aprietan porque esperar una
+  respuesta no gasta CPU; parsear 240 páginas de HTML sí, y es otra razón para
+  preferir `api` sobre `scrape` (§6.2).
 - **Volumen**: un hogar carga del orden de decenas de movimientos por mes y sigue
-  decenas de productos. El límite de 10 GB de D1 no se toca. Lo que crece de verdad
+  decenas de productos. El límite del plan gratuito son 500 MB por base, y no se toca. Lo que crece de verdad
   es `item_prices` —productos × comercios × cuatro corridas diarias—: se conserva un
   precio por producto, comercio y día, y por encima de 18 meses se agrega a un
   precio semanal.

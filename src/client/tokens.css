@@ -1,0 +1,64 @@
+/*
+ * Tokens del sistema de diseño. SDD §11.
+ * Los acentos se generan en OKLCH desde tono y croma, en rampas de nueve pasos.
+ * La paleta 'organic' es el default; el usuario puede elegir entre seis (§11).
+ */
+:root {
+  --font-heading: "Caprasimo", Georgia, serif;
+  --font-body: "Figtree", system-ui, -apple-system, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 28px;
+
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #2e2b25 14%, transparent);
+  --shadow-md: 0 3px 10px color-mix(in srgb, #2e2b25 18%, transparent);
+  --shadow-lg: 0 12px 32px color-mix(in srgb, #2e2b25 22%, transparent);
+
+  /* Acento 1 — organic: tono 52, croma 0.11. Luminosidad y croma relativo de §11. */
+  --color-accent-100: oklch(0.955 0.033 52);
+  --color-accent-200: oklch(0.90 0.0495 52);
+  --color-accent-300: oklch(0.82 0.0715 52);
+  --color-accent-500: oklch(0.635 0.11 52);
+  --color-accent-700: oklch(0.475 0.1045 52);
+  --color-accent-800: oklch(0.375 0.0935 52);
+  --color-accent: var(--color-accent-500);
+
+  /* Acento 2 — organic: tono 122, croma 0.05 */
+  --color-accent-2-200: oklch(0.90 0.0225 122);
+  --color-accent-2-500: oklch(0.635 0.05 122);
+  --color-accent-2-600: oklch(0.56 0.05 122);
+  --color-accent-2-800: oklch(0.375 0.0425 122);
+
+  --color-bg: #f5ead8;          /* Crema, el fondo por defecto de §11 */
+  --color-neutral-100: #fffdf8;
+  --color-neutral-200: #ece4d4;
+  --color-neutral-400: #c9bfab;
+  --color-neutral-600: #7d7466;
+  --color-neutral-700: #5f5850;
+  --color-neutral-800: #423d37;
+  --color-text: #2e2b25;
+
+  /* La tinta sobre relleno de acento. §11: portarlo tal cual. */
+  --on-accent: #fffdf8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0;
+}

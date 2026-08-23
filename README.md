@@ -1,5 +1,38 @@
 # Handoff: Brote — presupuesto personal con seguimiento de precios
 
+## Estado del código
+
+Etapa 1 de `SDD.md` §14, andando y desplegable. Lo que hay:
+
+| Qué | Dónde |
+|---|---|
+| Worker con Hono, assets de la SPA, `scheduled` con contabilidad en `job_runs` | `src/worker/` |
+| Validación del JWT de Access con WebCrypto, sin dependencias | `src/worker/access.ts` |
+| Aislamiento por hogar: `HouseholdContext` como primer parámetro, `assertOwnsItem` para las tablas hijas | `src/lib/db/` |
+| Las únicas tablas que se leen sin hogar | `src/lib/db/public/` |
+| Matemática de §5: `monthNominal`, `adjust`, `monthFactor`, `realChange`, la derivación de `month_totals` | `src/lib/finance/` |
+| Formato es-AR en un solo lugar | `src/lib/format.ts` |
+| SPA con los tokens de §11 y el estado "todavía no estás en un hogar" | `src/client/` |
+| Esquema como migración | `migrations/0001_init.sql` |
+
+**32 tests**, uno por regla del dominio y cuatro que hacen cumplir el aislamiento de
+§13.3 recorriendo el árbol.
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run db:local     # aplica la migración a la D1 local
+npm run dev          # SPA en :5173, Worker en :8787
+```
+
+Para desplegar, `DEPLOY.md`. Los límites reales del plan gratuito están en su §9, y no
+son los que decía la documentación anterior.
+
+Lo que **no** está todavía: las nueve vistas de §4 más allá del esqueleto, los
+adaptadores de precios (§6.2), el OCR (§10) y los cron con trabajo de verdad adentro.
+El orden está en §14.
+
 ## Qué es esto
 
 Paquete de handoff para implementar **Brote** en un codebase real, desplegado en
