@@ -14,15 +14,23 @@ bajo `/api/*`. No hay dominio separado para el frontend, así que no hay CORS.
 Necesitás:
 
 - Una cuenta de Cloudflare. El **plan gratuito alcanza** para arrancar: esta guía no
-  usa Queues. Ver §5 para cuándo conviene pasar al plan pago.
-- Un dominio en Cloudflare, o aceptar el subdominio `brote.<tu-cuenta>.workers.dev`.
-- Node 20+ y `npm i -D wrangler`.
-- Un proyecto en Google Cloud Console para el login.
+  usa Queues. Ver §9 para los límites reales del plan gratuito.
+- **Un dominio propio, agregado a Cloudflare como zona activa.** No es opcional y no
+  se puede reemplazar por `workers.dev`: Cloudflare Access solo protege hostnames de
+  una zona activa de tu cuenta, así que sin dominio no hay login y sin login no hay
+  Brote. Es el único renglón que puede costar plata —un dominio, del orden de 10 USD
+  al año— y si ya tenés uno, alcanza con un subdominio (`brote.tudominio.com`).
+- Un proyecto en **Google Cloud Console**, para crear el cliente OAuth que Zero Trust
+  usa como proveedor de identidad. Gratis.
+- Node 22+ si vas a trabajar local. Si desplegás desde el panel (§10), no hace falta
+  nada instalado.
 
 ```bash
 npx wrangler login
 npx wrangler whoami     # confirmá la cuenta correcta
 ```
+
+Eso último solo para el camino con terminal. Desde el panel, saltá a §10.
 
 ---
 
@@ -449,9 +457,23 @@ Cada migración nueva se aplica igual, a mano y en orden. Es el costo de no tene
 
 ### 10.3 Access con Google
 
-Igual que §3, que no cambia: Zero Trust → Access → Applications → Self-hosted, dominio
-`brote.example.com`, Google como IdP, policy *Allow* con los mails del hogar. De ahí
-sale el **Application Audience (AUD) Tag**, que es el tercer `REEMPLAZAR`.
+Son **dos cosas distintas** y en este orden:
+
+1. **El proveedor de identidad**, una vez por cuenta. Requiere crear un cliente OAuth
+   en Google Cloud Console: APIs & Services → Credentials → Create OAuth client →
+   *Web application*, con
+   - Authorized JavaScript origin: `https://<tu-equipo>.cloudflareaccess.com`
+   - Authorized redirect URI: `https://<tu-equipo>.cloudflareaccess.com/cdn-cgi/access/callback`
+
+   Con el Client ID y el Client Secret: Zero Trust → **Integrations → Identity
+   providers** → Add new → Google.
+2. **La aplicación**: Zero Trust → **Access controls → Applications** → Create new
+   application → *Self-hosted and private* → Add public hostname, el hostname de Brote,
+   y una policy *Allow* con los mails del hogar en `Emails`.
+
+De la aplicación creada sale el **Application Audience (AUD) Tag**, que es el tercer
+`REEMPLAZAR`. Los nombres de los menús del panel cambian de vez en cuando; lo que no
+cambia es que son dos pasos y que el primero pasa por Google Cloud Console.
 
 ### 10.4 Completar `wrangler.toml` y commitear
 
