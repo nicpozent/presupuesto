@@ -1,8 +1,20 @@
 # Contrato de API — Brote
 
 Prefijo `/api`. JSON en request y response. Todos los importes en **centavos**
-(`amountCents`). Fechas ISO 8601. La sesión viaja en cookie `HttpOnly`; no hay
-tokens en el body.
+(`amountCents`). Fechas ISO 8601. No hay cookie de sesión propia ni tokens en el
+body: la identidad viaja en el header `Cf-Access-Jwt-Assertion` que pone Cloudflare
+Access, y el Worker lo valida en cada request (`SDD.md` §7.1).
+
+Los importes derivados de un cálculo de §5 llevan su procedencia. Dos campos, en
+todo endpoint que los produzca:
+
+- `basis`: `"real"` | `"estimado"` | `"sinDato"` — de dónde salió el total del mes
+  (`SDD.md` §5.1). Un punto `sinDato` no se dibuja; uno `estimado` se dibuja marcado.
+- `ipcEstimated`: `true` cuando la cadena de cálculo usó un IPC todavía no publicado
+  por el INDEC (`SDD.md` §5.7).
+
+Nunca se omite ninguno de los dos para "simplificar el JSON": son la regla 5 de
+`CLAUDE.md` del lado de la API.
 
 Errores:
 
@@ -10,8 +22,9 @@ Errores:
 { "error": { "code": "not_found", "message": "El movimiento no existe" } }
 ```
 
-Códigos: `unauthenticated` (401), `forbidden` (403), `not_found` (404),
-`validation` (422), `rate_limited` (429), `upstream_unavailable` (503).
+Códigos: `unauthenticated` (401), `forbidden` (403), `no_household` (403),
+`not_found` (404), `validation` (422), `rate_limited` (429),
+`upstream_unavailable` (503).
 
 Todo endpoint resuelve el `household_id` desde la sesión. **Ningún endpoint acepta
 `householdId` del cliente.**
@@ -29,16 +42,47 @@ header `Cf-Access-Jwt-Assertion`; un middleware lo valida contra
 Al primer ingreso de un mail nuevo se crea la fila en `users`. El logout es
 `/cdn-cgi/access/logout`, servido por Cloudflare.
 
+**Access dice quién entra a la app; Brote dice a qué hogar pertenece** (`SDD.md`
+§7.1.1). Al primer ingreso: si no existe ningún hogar, se crea el hogar y el usuario
+queda `owner`; si hay una invitación vigente para ese mail, se une a ese hogar como
+`member`; si no hay ninguna, la fila en `users` queda con `household_id` en `null` y
+**no se crea un hogar nuevo**.
+
+Un usuario sin hogar recibe `403 forbidden` con `code: "no_household"` en todo
+endpoint de datos —está autenticado, no pertenece— y solo puede llamar a
+`GET /api/me`.
+
 ### `GET /api/me`
 ```json
 { "user": { "id": "u_1", "email": "martin@…", "name": "Martín", "role": "owner" },
   "household": { "id": "h_1", "name": "Casa Domínguez", "currency": "ARS",
                  "palette": "organic", "ground": "crema", "inflationAdjusted": true } }
 ```
+Con el usuario todavía sin hogar, `household` es `null` y el cliente muestra la
+pantalla de "pedile la invitación a quien administra el hogar":
+```json
+{ "user": { "id": "u_2", "email": "valentina@…", "name": "Valentina", "role": null },
+  "household": null }
+```
 
 ### Agregar a alguien del hogar
-No hay endpoint: se agrega el mail en la policy de Access, en el panel. La fila en
-`users` se crea sola en su primer ingreso.
+**Son dos pasos y los dos hacen falta** (`SDD.md` §7.1.1): agregar el mail en la
+policy de Access —sin eso no llega ni al login— y crear la invitación acá —sin eso
+llega y no tiene hogar. La UI los muestra como checklist de dos ítems.
+
+#### `GET /api/invites` · solo `owner`
+```json
+{ "invites": [{ "id": "inv_1", "email": "valentina@…", "expiresAt": "2026-09-06T00:00:00Z",
+                "acceptedAt": null }] }
+```
+#### `POST /api/invites` · solo `owner`
+`{ "email": "valentina@…" }` → `201 { "id": "inv_1", "expiresAt": "2026-09-06T00:00:00Z" }`
+
+Vence a los 14 días. Un `member` recibe `403 forbidden`. Un mail ya miembro del
+hogar, `422 validation`.
+
+#### `DELETE /api/invites/:id` · solo `owner`
+Revoca una invitación no aceptada.
 
 ---
 
@@ -56,7 +100,10 @@ No hay endpoint: se agrega el mail en la policy de Access, en el panel. La fila 
     "priceSources": 7
   },
   "series": [
-    { "year": 2025, "month": 8, "nominalCents": 130550000, "realCents": 168900000, "ipcPct": 3.1 }
+    { "year": 2025, "month": 8, "nominalCents": 130550000, "realCents": 168900000,
+      "ipcPct": 3.1, "basis": "real", "ipcEstimated": false },
+    { "year": 2026, "month": 7, "nominalCents": 273680000, "realCents": 273680000,
+      "ipcPct": 2.0, "basis": "real", "ipcEstimated": true }
   ],
   "close": {
     "good": ["…"],
@@ -66,6 +113,11 @@ No hay endpoint: se agrega el mail en la policy de Access, en el panel. La fila 
 }
 ```
 `realCents` ya viene calculado en el servidor: el cliente no recalcula inflación.
+
+`series` **empieza en el primer mes con dato real del hogar** y `range` la acota: no
+se rellena hacia atrás con meses inventados (`SDD.md` §5.1). Un hogar con tres meses
+cargados recibe tres puntos. `detectedSavingsCents` se calcula según §4.1.1 y cambia
+cuando el hogar apaga una fuente en `/api/connections`.
 
 ### `GET /api/overview/projection?to=2027-03&mode=real`
 ```json
@@ -89,8 +141,8 @@ No hay endpoint: se agrega el mail en la policy de Access, en el panel. La fila 
 {
   "categories": [
     { "id": "c_1", "name": "Supermercado", "nowCents": 74200000, "prevCents": 68800000,
-      "nominalChangePct": 7.8, "realChangePct": 5.6, "budgetCents": 72000000,
-      "isVariable": true, "mtdCents": 44800000 }
+      "nominalChangePct": 7.8, "realChangePct": 5.6, "ipcEstimated": true,
+      "budgetCents": 72000000, "isVariable": true, "mtdCents": 44800000 }
   ],
   "insights": [
     { "kind": "Promedio", "title": "…", "body": "…",
@@ -122,7 +174,10 @@ No hay endpoint: se agrega el mail en la policy de Access, en el panel. La fila 
 ```
 `period.kind`: `current` | `history` | `scheduled`. En `scheduled` solo vienen
 ocurrencias de reglas y `editable` es `false` (se edita la regla, no la ocurrencia).
-`monthTotalCents` sale de `month_totals`, **no** de sumar `items`.
+`monthTotalCents` sale de `month_totals`, **no** de sumar `items`. Cómo se calcula
+esa fila y cuándo se recalcula está en `SDD.md` §5.0; ningún endpoint la deriva por
+su cuenta. `detailedTotalCents` sí es la suma de `items`, y el pie de la pantalla
+muestra los dos y dice que son distintos (regla 3 de `CLAUDE.md`).
 
 ### `POST /api/transactions`
 ```json
@@ -150,7 +205,8 @@ Mismos campos. `recurring: null` elimina la regla asociada.
   "avgMonthlyCents": 215923750,
   "highest": { "month": 7, "cents": 273680000 },
   "lowest": { "month": 0, "cents": 165100000 },
-  "months": [{ "month": 0, "nominalCents": 165100000, "realCents": 189200000 }],
+  "months": [{ "month": 0, "nominalCents": 165100000, "realCents": 189200000,
+               "basis": "real" }],
   "categories": [{ "name": "Alquiler y expensas", "totalCents": 452000000, "sharePct": 26.2 }],
   "topMerchants": [{ "name": "Coto Villa Crespo", "totalCents": 98400000 }],
   "topMerchantsNote": "Cubre solo los movimientos con comercio identificado."
@@ -195,6 +251,12 @@ Mismos campos. `recurring: null` elimina la regla asociada.
 ordenados por proximidad. `fromRule` distingue el origen.
 
 ### `PATCH /api/income/:id` · `PATCH /api/fixed/:id` · `PATCH /api/installments/:id`
+### `POST /api/fixed` · `DELETE /api/fixed/:id`
+
+`POST /api/fixed` y `POST /api/recurring` rechazan con `422 validation` un nombre de
+compromiso fijo que coincide con el `merchant` de una regla activa, y al revés: los
+dos alimentan el total del mes por términos distintos (`SDD.md` §5.0) y cargar el
+alquiler en los dos lugares lo cuenta dos veces sin que se note en la pantalla.
 
 ---
 
@@ -297,10 +359,13 @@ BNA y xe.com van separados. No promediar.
 
 ### `GET /api/inflation?months=24`
 ```json
-{ "latest": { "year": 2026, "month": 7, "monthlyPct": 2.1, "isEstimate": false },
+{ "latest": { "year": 2026, "month": 7, "monthlyPct": 2.0, "isEstimate": true },
   "projectedMonthlyPct": 2.0,
-  "series": [{ "year": 2026, "month": 6, "monthlyPct": 2.0 }] }
+  "series": [{ "year": 2026, "month": 6, "monthlyPct": 2.1, "isEstimate": false }] }
 ```
+`isEstimate` viaja en cada punto. El INDEC publica alrededor del día 15, así que el
+mes más reciente es estimado durante unas seis semanas: se calcula igual y se marca,
+nunca se presenta como medición (`SDD.md` §5.7).
 
 ---
 
@@ -352,4 +417,12 @@ usuario. **El movimiento nunca se crea sin este paso.**
 ### `GET /api/alerts?unread=true`
 ### `POST /api/alerts/:id/read`
 
-Tipos: `due_soon`, `price_drop`, `budget_over`, `subscription_idle`, `fx_move`.
+Tipos: `due_soon`, `price_drop`, `budget_over`, `subscription_idle`, `fx_move`,
+`job_stale`.
+
+`job_stale` no habla de la plata del hogar sino de Brote: un trabajo de fondo que no
+tuvo corrida exitosa en el doble de su intervalo (`SDD.md` §13.2). Aparece igual, y
+la UI la distingue de las otras.
+
+`subscription_idle` está **pendiente de decisión** (`SDD.md` §13.4): Brote ve el
+cargo, no el uso. Hasta que se resuelva no se emite con una afirmación de uso.

@@ -34,9 +34,10 @@ Cada comando imprime un id. Copialos: van en `wrangler.toml`.
 # Base de datos
 npx wrangler d1 create brote
 
-# Caches
+# Caches. No hay AUTH_STATE: sin flujo OAuth propio no hay state ni
+# code_verifier que guardar (SDD §7.1).
 npx wrangler kv namespace create CACHE
-npx wrangler kv namespace create AUTH_STATE
+npx wrangler kv namespace create PAGES
 
 # Fotos de tickets
 npx wrangler r2 bucket create brote-receipts
@@ -72,34 +73,47 @@ como semilla en el mismo `schema.sql`. Si preferís separarlo, movelo a un
 
 ---
 
-## 3. Login con Google
+## 3. Login: Cloudflare Access con Google
 
-En **Google Cloud Console → APIs & Services → Credentials**, creá un
-*OAuth client ID* de tipo *Web application*:
+**Decidido: Access.** No se implementa flujo OAuth propio, no hay
+`GOOGLE_CLIENT_SECRET` ni `SESSION_SECRET`, no hay tabla `sessions`. El razonamiento
+y la alternativa descartada están en `SDD.md` §7.
 
-- **Authorized JavaScript origins**: `https://brote.example.com`
-- **Authorized redirect URIs**: `https://brote.example.com/auth/google/callback`
+En **Cloudflare Zero Trust → Access → Applications**, agregá una *Self-hosted
+application*:
 
-Agregá también las URIs de staging si vas a usar ese entorno. En la pantalla de
-consentimiento alcanza con los scopes `openid`, `email` y `profile`: Brote no
-necesita acceso a Gmail ni a Drive.
+- **Application domain**: `brote.example.com` (y el de staging, como app aparte).
+- **Identity provider**: Google. Se configura una vez en *Settings → Authentication*
+  con un OAuth client de Google Cloud Console; los scopes que pide Access alcanzan y
+  Brote no necesita nada de Gmail ni de Drive.
+- **Policy**: *Allow*, con `Emails` y la lista de mails del hogar.
+- **Session duration**: lo que quieras; Access renueva solo.
 
-El `client_id` es público y va en `[vars]`. El secreto no:
+De la aplicación creada salen los dos valores públicos que van en `[vars]` de
+`wrangler.toml`:
 
-```bash
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put SESSION_SECRET      # openssl rand -base64 48
-npx wrangler secret put OCR_API_KEY
+```
+CF_ACCESS_TEAM_DOMAIN = "tu-equipo.cloudflareaccess.com"
+CF_ACCESS_AUD         = el Application Audience Tag de la app
 ```
 
-Repetí con `--env staging` para el entorno de staging: los secretos no se heredan
-entre entornos.
+El único secreto de la v1 es la clave del modelo:
 
-**Atajo para uso familiar o piloto cerrado**: en vez de implementar el flujo OAuth,
-poné el Worker detrás de **Cloudflare Access** con Google como proveedor de
-identidad y una policy que liste los mails permitidos. El borde valida el token y
-el Worker lee `Cf-Access-Jwt-Assertion`. Menos código, pero no sirve para registro
-abierto de usuarios.
+```bash
+npx wrangler secret put COHERE_API_KEY
+```
+
+Repetí con `--env staging`: los secretos no se heredan entre entornos.
+
+**El Worker igual valida el JWT.** Access pone `Cf-Access-Jwt-Assertion` y el
+middleware lo verifica contra `https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`
+chequeando `aud`. Sin esa validación, cualquiera que llegue al Worker por otra ruta
+—un custom domain que no pasó por Access, `workers.dev` sin apagar— entra sin nada.
+Apagá la ruta `workers.dev` del Worker en producción.
+
+**Agregar a alguien al hogar son dos pasos** (`SDD.md` §7.1.1): el mail en la policy
+de Access **y** la invitación en Brote (`POST /api/invites`). Con solo el primero, la
+persona entra y no tiene hogar; con solo el segundo, no llega ni al login.
 
 ---
 
@@ -116,8 +130,9 @@ Comprobación mínima:
 curl -i https://brote.example.com/api/health
 ```
 
-Y en el navegador: entrar, hacer login con Google, ver el Resumen con la cuenta
-vacía. Que no explote con cero datos es parte de la prueba.
+Y en el navegador: entrar, pasar por la pantalla de Google que pone Access, ver el
+Resumen con la cuenta vacía. Que no explote con cero datos es parte de la prueba
+(`SDD.md` §12.2): la serie histórica no tiene que dibujar ejes vacíos ni un `$ 0`.
 
 ---
 
@@ -165,7 +180,7 @@ Cada consulta a un comercio es un subrequest, y un Worker tiene 1000 subrequests
 productos con la consulta más vieja, en vez de todos:
 
 ```sql
-select * from watch_item
+select * from watched_items
 where household_id = ?
 order by last_checked_at asc nulls first
 limit 40
@@ -268,8 +283,15 @@ producción.
 
 - **Logs en vivo**: `npx wrangler tail`
 - **Métricas y trazas**: ya activadas con `[observability] enabled = true`
-- **Fallos de consulta**: `select comercio, count(*) from price_fetch_log where ok = 0
-  and creado_at > ? group by 1`. Un comercio que aparece seguido cambió su HTML.
+- **Fallos de consulta**: `select retailer_id, count(*) from price_fetch_log
+  where ok = 0 and created_at > ? group by 1`. Un comercio que aparece seguido
+  cambió su HTML.
+- **Trabajos de fondo**: `select job, max(started_at) from job_runs where ok = 1
+  group by job`. Si alguno quedó atrás más del doble de su intervalo, ya tendría que
+  haber una alerta `job_stale` (`SDD.md` §13.2); si no la hay, lo que está roto es el
+  cron de alertas.
+- **Migraciones**: `npx wrangler d1 migrations apply brote --remote`. `schema.sql` es
+  la línea de base y no se edita para cambiar una base que ya existe (`SDD.md` §13.1).
 - **Backups de D1**: `npx wrangler d1 export brote --remote --output=brote-$(date +%F).sql`,
   programado. D1 tiene time travel de 30 días, pero un export propio es barato.
 

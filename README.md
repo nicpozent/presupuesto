@@ -58,7 +58,7 @@ prototipo. Los diálogos están recortados a su propio marco, a 2x.
 |---|---|
 | `01-resumen.png` | Resumen — KPIs, serie nominal vs. real, proyección, cierre de mes |
 | `02-analisis-gastos.png` | Análisis de gastos — tabla de categorías, insights, suscripciones |
-| `03-movimientos-mes.png` | Movimientos — "Quién gastó qué", libro del mes, filtros, histórico 44 meses |
+| `03-movimientos-mes.png` | Movimientos — "Quién gastó qué", libro del mes, filtros, selector de 44 meses |
 | `04-movimientos-anual.png` | Movimientos → Por año — resumen anual y exportación |
 | `05-ingresos-compromisos.png` | Ingresos, vencimientos, cuotas por producto, aguinaldo, plata quieta |
 | `06-presupuesto-objetivos.png` | Sobres, administración de categorías, objetivos con dueño |
@@ -75,17 +75,19 @@ prototipo. Los diálogos están recortados a su propio marco, a 2x.
 | `17-dialogo-editar-movimiento.png` | Diálogo de edición con persona y regla recurrente |
 | `18-perfil-valentina.png` | La misma pantalla filtrada por persona |
 
-## Autenticación con Google: sí
+## Autenticación con Google: sí, por Cloudflare Access
 
-Google es la única opción de login que hace falta, y en Cloudflare el camino corto
-es **Cloudflare Access con Google como proveedor de identidad**: el Worker recibe el
-JWT `Cf-Access-Jwt-Assertion` ya validado por el borde y no hay que escribir flujo
-OAuth. Sirve bien para un hogar o un piloto cerrado.
+**Decidido: Cloudflare Access con Google como proveedor de identidad.** El Worker
+recibe el JWT `Cf-Access-Jwt-Assertion`, lo valida contra el JWKS del equipo en cada
+request, y no hay flujo OAuth propio, ni tabla `sessions`, ni refresh tokens. Brote
+es para un hogar: no hay registro abierto.
 
-Para producto abierto conviene **OAuth 2.0 + PKCE contra Google directamente** dentro
-del Worker, con la sesión en una cookie `HttpOnly; Secure; SameSite=Lax` firmada, y el
-`refresh_token` cifrado en D1. `SDD.md` §7 tiene el flujo completo, los scopes y el
-manejo de sesión; `api-contract.md` los endpoints `/auth/*`.
+Ojo con lo que Access **no** resuelve: decide quién llega a la app, no a qué hogar
+pertenece. Sumar a alguien son dos pasos —el mail en la policy de Access y la
+invitación en Brote— y `SDD.md` §7.1.1 tiene el flujo.
+
+Para el día que haga falta abrirlo, `SDD.md` §7.2 documenta OAuth 2.0 + PKCE
+completo: flujo, scopes y manejo de sesión. Está escrito y **no** implementado.
 
 ## Lo primero que hay que decidir con el usuario
 

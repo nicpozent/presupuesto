@@ -68,8 +68,10 @@ No le pidas "hacé la app". Pedile una etapa, con criterio de terminado:
 > Vamos a construir Brote por etapas; hoy solo la etapa 1.
 >
 > Etapa 1: Worker con Hono + SPA de React con Vite servida como assets del mismo
-> Worker + D1 con schema.sql aplicado + login con Google. Nada de pantallas de
-> producto todavía: alcanza con entrar, ver el nombre del hogar y salir.
+> Worker + D1 con schema.sql aplicado + Cloudflare Access validando el JWT en cada
+> request + el acceso a datos de SDD §13.3 (todo por src/lib/db/, con su test). Nada
+> de pantallas de producto todavía: alcanza con entrar, ver el nombre del hogar y
+> salir. Incluí el caso del usuario que pasó Access y todavía no tiene hogar.
 >
 > Antes de escribir código mostrame la estructura de carpetas que proponés y
 > esperá que la apruebe.

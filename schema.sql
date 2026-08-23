@@ -4,7 +4,9 @@
 -- Convenciones:
 --   · importes en centavos, INTEGER
 --   · fechas ISO 8601 UTC en TEXT
---   · toda tabla de datos lleva household_id y se filtra por él en cada query
+--   · toda tabla de datos del hogar lleva household_id y se filtra por él en cada
+--     query. Excepciones declaradas, todas de contexto público: fx_rates,
+--     inflation, job_runs y las filas de retailers de fábrica. Ver SDD §13.3.
 
 PRAGMA foreign_keys = ON;
 
@@ -21,6 +23,8 @@ CREATE TABLE households (
 
 CREATE TABLE users (
   id           TEXT PRIMARY KEY,
+  -- NULL a propósito: un usuario que pasó Access pero todavía no fue invitado a
+  -- ningún hogar es un estado válido. Ver SDD §7.1.1.
   household_id TEXT REFERENCES households(id) ON DELETE CASCADE,
   google_sub   TEXT NOT NULL UNIQUE,        -- identidad estable, no el email
   email        TEXT NOT NULL,
@@ -32,15 +36,12 @@ CREATE TABLE users (
 );
 CREATE INDEX idx_users_household ON users(household_id);
 
-CREATE TABLE sessions (
-  id          TEXT PRIMARY KEY,             -- id opaco; la cookie lleva id + HMAC
-  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  expires_at  TEXT NOT NULL,
-  user_agent  TEXT,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX idx_sessions_user ON sessions(user_id);
+-- No hay tabla de sesiones: el login lo resuelve Cloudflare Access y cada request
+-- trae su propio JWT, validado contra el JWKS del equipo. Ver SDD §7.1.
 
+-- Access decide quién llega a la app; esta tabla decide a qué hogar pertenece.
+-- Sin invitación, un mail nuevo que pasa Access queda con household_id NULL y no
+-- ve datos de nadie. Ver SDD §7.1.1: son dos pasos, el panel de Access y esto.
 CREATE TABLE invites (
   id           TEXT PRIMARY KEY,
   household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
@@ -223,7 +224,9 @@ CREATE TABLE item_prices (
   retailer_id TEXT NOT NULL REFERENCES retailers(id) ON DELETE CASCADE,
   price_cents INTEGER NOT NULL,
   checked_at  TEXT NOT NULL,
-  source      TEXT NOT NULL CHECK (source IN ('api','scrape','manual','receipt')),
+  -- Misma lista que PriceSource en SDD §6. Se editan juntas.
+  -- 'receipt' es válido acá y no en el adaptador: ese precio lo trae el OCR (§10).
+  source      TEXT NOT NULL CHECK (source IN ('api','scrape','llm','manual','receipt')),
   url         TEXT,
   stale       INTEGER NOT NULL DEFAULT 0
 );
@@ -305,8 +308,11 @@ CREATE TABLE receipts (
 CREATE TABLE alerts (
   id           TEXT PRIMARY KEY,
   household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  -- job_stale no es sobre la plata del hogar sino sobre Brote: un cron que dejó
+  -- de correr. Aparece igual. Ver SDD §13.2.
   kind         TEXT NOT NULL CHECK (kind IN
-                 ('due_soon','price_drop','budget_over','subscription_idle','fx_move')),
+                 ('due_soon','price_drop','budget_over','subscription_idle','fx_move',
+                  'job_stale')),
   payload      TEXT NOT NULL,                -- JSON
   read_at      TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
@@ -328,6 +334,22 @@ CREATE TABLE audit_log (
   detail       TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Una fila por corrida de un trabajo de fondo. Un precio viejo con su fecha a la
+-- vista es aceptable; un cron caído nueve días sin que nadie se entere, no.
+-- El cron de alertas mira esta tabla y levanta un alert 'job_stale' si un trabajo
+-- no tiene corrida exitosa en el doble de su intervalo. Ver SDD §13.2.
+CREATE TABLE job_runs (
+  id          TEXT PRIMARY KEY,
+  job         TEXT NOT NULL CHECK (job IN ('fx','ipc','prices','alerts')),
+  ok          INTEGER NOT NULL,
+  started_at  TEXT NOT NULL,
+  finished_at TEXT,
+  ms          INTEGER,
+  items_done  INTEGER,                     -- productos atendidos en el lote
+  error       TEXT
+);
+CREATE INDEX idx_jobruns_job ON job_runs(job, started_at DESC);
 
 -- Comercios de v1
 INSERT INTO retailers (id, name, kind, is_wholesale) VALUES
