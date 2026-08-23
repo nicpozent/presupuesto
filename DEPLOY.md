@@ -431,9 +431,23 @@ nombre del Worker y todos los bindings. Está en el repo con tres `REEMPLAZAR`.
 |---|---|---|
 | Base D1 | Storage & Databases → D1 → Create | `brote` |
 | Namespace KV | Storage & Databases → KV → Create | `brote-cache` |
-| Bucket R2 | R2 → Create bucket | `brote-receipts` |
+| Bucket R2 | R2 → Create bucket | `brote-receipts` — **no hace falta todavía** |
 
 Anotá el **Database ID** de D1 y el **Namespace ID** de KV: van en `wrangler.toml`.
+
+**R2 puede esperar.** El binding viene comentado, porque el bucket de fotos de tickets
+recién se usa en el paso 8 de `SDD.md` §14 y hasta entonces ningún código lo toca.
+Declararlo obliga a que el bucket exista y a tener R2 activado en la cuenta, y si algo
+de eso falta el deploy corta con
+
+```
+✘ [ERROR] A request to the Cloudflare API
+          (/accounts/…/r2/buckets/brote-receipts) failed
+```
+
+que es un error de un recurso que la app todavía no usa. Cuando llegue el OCR: creá el
+bucket, descomentá el bloque `[[r2_buckets]]` y volvé a poner `RECEIPTS` en la interfaz
+`Env` de `src/worker/index.ts`.
 
 ### 10.2 Cargar el esquema
 

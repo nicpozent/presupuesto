@@ -57,9 +57,17 @@ id = "be3651bc55ee4479930a66bd68a31614"
 # No hay binding PAGES para cachear HTML: gastaba una escritura de KV por página y
 # el plan gratuito da 1.000 por día. Los precios viven en D1. Ver DEPLOY.md §9.
 
-[[r2_buckets]]
-binding = "RECEIPTS"
-bucket_name = "brote-receipts"
+# R2 todavía no: el bucket de fotos de tickets se usa en el paso 8 de SDD §14 (OCR),
+# y hasta entonces ningún código toca el binding. Declararlo obliga a que el bucket
+# exista y a tener R2 activado en la cuenta, y si no está el deploy corta con
+#   ✘ [ERROR] A request to the Cloudflare API (/accounts/…/r2/buckets/brote-receipts) failed
+# Para volver a activarlo: creá el bucket (R2 → Create bucket → brote-receipts),
+# descomentá este bloque, y volvé a poner RECEIPTS en la interfaz Env de
+# src/worker/index.ts.
+#
+# [[r2_buckets]]
+# binding = "RECEIPTS"
+# bucket_name = "brote-receipts"
 
 # Sin Queues: el trabajo periódico lo hace el handler scheduled.
 # Ver DEPLOY.md §5 para los lotes de precios y §9 para los límites del plan gratuito.
