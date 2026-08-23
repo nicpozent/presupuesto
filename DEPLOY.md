@@ -431,23 +431,27 @@ nombre del Worker y todos los bindings. Está en el repo con tres `REEMPLAZAR`.
 |---|---|---|
 | Base D1 | Storage & Databases → D1 → Create | `brote` |
 | Namespace KV | Storage & Databases → KV → Create | `brote-cache` |
-| Bucket R2 | R2 → Create bucket | `brote-receipts` — **no hace falta todavía** |
+| Bucket R2 | R2 → Overview → completar el checkout de R2, después Create bucket | `brote-receipts` |
 
 Anotá el **Database ID** de D1 y el **Namespace ID** de KV: van en `wrangler.toml`.
 
-**R2 puede esperar.** El binding viene comentado, porque el bucket de fotos de tickets
-recién se usa en el paso 8 de `SDD.md` §14 y hasta entonces ningún código lo toca.
-Declararlo obliga a que el bucket exista y a tener R2 activado en la cuenta, y si algo
-de eso falta el deploy corta con
+**R2 hay que activarlo antes de crear el bucket.** No alcanza con ir a *Create
+bucket*: primero **R2 → Overview → completar el checkout** que agrega la suscripción de
+R2 a la cuenta. Hasta que eso esté, la API no contesta y el deploy corta con
 
 ```
 ✘ [ERROR] A request to the Cloudflare API
           (/accounts/…/r2/buckets/brote-receipts) failed
 ```
 
-que es un error de un recurso que la app todavía no usa. Cuando llegue el OCR: creá el
-bucket, descomentá el bloque `[[r2_buckets]]` y volvé a poner `RECEIPTS` en la interfaz
-`Env` de `src/worker/index.ts`.
+que desconcierta porque nombra un recurso que la app todavía no usa. El
+`bucket_name` de `wrangler.toml` tiene que coincidir exacto con el nombre del bucket.
+
+El tramo gratuito de R2 son 10 GB, 1 millón de operaciones de escritura y 10 millones
+de lectura por mes, con egress gratis. Un hogar con treinta tickets por mes de 2 MB usa
+60 MB por mes: **catorce años de almacenamiento y el 0,003% de las escrituras.** Por eso
+las fotos van a R2 y no a D1, donde el límite de 2 MB por fila no las aceptaría y los
+500 MB de la base se los comerían compitiendo con los movimientos.
 
 ### 10.2 Cargar el esquema
 

@@ -11,7 +11,7 @@ import { readInflation, readJobHealth, readLatestFx } from "../lib/db/public/mac
 export interface Env {
   DB: D1Database;
   CACHE: KVNamespace;
-  // RECEIPTS: R2Bucket;  ← con el bucket de R2, en el paso 8 de SDD §14 (OCR)
+  RECEIPTS: R2Bucket;   // fotos de tickets; se usa en el paso 8 de SDD §14 (OCR)
   APP_URL: string;
   CF_ACCESS_TEAM_DOMAIN: string;
   CF_ACCESS_AUD: string;
