@@ -923,10 +923,18 @@ Para una app que tiene todos los gastos del hogar adentro, eso justifica los qui
 minutos de Google Cloud Console. Si igual se elige OTP, que sea a sabiendas y con 2FA en
 ese Gmail, porque ahí es el único factor y carga con todo.
 
-**Lo que pesa más que esta decisión**: la ruta `workers.dev` encendida no pasa por
-Access, y con eso ninguna de las dos opciones protege nada —cualquiera con la URL
-entra—. Apagarla vale más que toda esta comparación. Lo segundo, que la lista de mails
-de la policy tenga los dos o tres que hacen falta y nada más.
+**Sobre la ruta `workers.dev`**, que en una versión anterior de este documento estaba
+exagerado: no pasa por Access, pero **no es una puerta abierta**, porque el Worker valida
+el JWT por su cuenta y sin header responde `401` en todo endpoint de datos. Medido: por
+una ruta sin Access se sirven `/` —el cascarón de la SPA— y `/api/health`, y nada más.
+
+Igual se apaga en producción, por dos razones que no son "cualquiera entra": es una
+segunda vía de entrada que hay que razonar aparte, y el día que alguien agregue un
+endpoint fuera del middleware ahí queda expuesto. Una sola puerta es más fácil de
+auditar que dos.
+
+Lo que sí pesa: que la lista de mails de la policy tenga los dos o tres que hacen falta
+y nada más.
 
 Lo único que cambia entre ambos es de dónde sale la identidad estable, y está resuelto
 en un solo lugar: `identityKey()` prefiere el claim `sub` del token y cae al email

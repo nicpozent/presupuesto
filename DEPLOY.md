@@ -123,11 +123,20 @@ npx wrangler secret put COHERE_API_KEY
 
 Repetí con `--env staging`: los secretos no se heredan entre entornos.
 
-**El Worker igual valida el JWT.** Access pone `Cf-Access-Jwt-Assertion` y el
-middleware lo verifica contra `https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`
-chequeando `aud`. Sin esa validación, cualquiera que llegue al Worker por otra ruta
-—un custom domain que no pasó por Access, `workers.dev` sin apagar— entra sin nada.
-Apagá la ruta `workers.dev` del Worker en producción.
+**El Worker igual valida el JWT**, y eso es lo que lo hace fallar cerrado. Access pone
+`Cf-Access-Jwt-Assertion` y el middleware lo verifica contra
+`https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs` chequeando `aud`. Por una ruta
+que no pasó por Access el header no llega, así que **todo endpoint de datos responde
+`401`**: medido, no supuesto.
+
+Lo que sí queda expuesto por una ruta así es el cascarón de la SPA —`/` devuelve el
+HTML— y `/api/health`, que es público a propósito. Ningún dato del hogar: el bundle no
+los tiene.
+
+Aun así, **apagá la ruta `workers.dev`** en producción. No porque sea una puerta
+abierta, sino porque es una segunda puerta: el día que alguien agregue un endpoint
+fuera del middleware, ahí queda sin protección, y una sola vía de entrada es más fácil
+de razonar que dos.
 
 **Agregar a alguien al hogar son dos pasos** (`SDD.md` §7.1.1): el mail en la policy
 de Access **y** la invitación en Brote (`POST /api/invites`). Con solo el primero, la
