@@ -9,10 +9,19 @@
  */
 
 export interface AccessClaims {
-  sub: string;
+  /** Ausente con proveedores que no mandan `sub`, como One-time PIN. */
+  sub?: string;
   email: string;
   name?: string;
 }
+
+/**
+ * La identidad estable con la que se busca al usuario. Prefiere `sub`, que no cambia
+ * si la persona cambia de email; cae al email cuando el proveedor no manda `sub`,
+ * porque ahí el email ES la identidad. Se guarda en users.idp_sub.
+ */
+export const identityKey = (c: { sub?: string; email: string }): string =>
+  c.sub ?? `email:${c.email.toLowerCase()}`;
 
 interface Jwk {
   kid: string;
@@ -95,7 +104,10 @@ export async function verifyAccessJwt(
   if (!aud.includes(opts.aud)) return null;
   if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now()) return null;
   if (payload.iss && payload.iss !== `https://${opts.teamDomain}`) return null;
-  if (!payload.sub || !payload.email) return null;
+  // El email siempre viene en un login de identidad. El `sub` depende del proveedor:
+  // un IdP OIDC lo manda, y no está confirmado que One-time PIN lo haga. No se exige,
+  // así que el Worker funciona con cualquiera de los dos sin cambiar código.
+  if (!payload.email) return null;
 
   return { sub: payload.sub, email: payload.email, name: payload.name };
 }

@@ -26,7 +26,11 @@ CREATE TABLE users (
   -- NULL a propósito: un usuario que pasó Access pero todavía no fue invitado a
   -- ningún hogar es un estado válido. Ver SDD §7.1.1.
   household_id TEXT REFERENCES households(id) ON DELETE CASCADE,
-  google_sub   TEXT NOT NULL UNIQUE,        -- identidad estable, no el email
+  -- Identidad estable del proveedor, no el email. Con un IdP OIDC (Google) es el
+  -- claim 'sub' del token; con One-time PIN, donde no hay sub, es el email, que ahí
+  -- ES la identidad. Se llama idp_sub y no google_sub porque el proveedor es una
+  -- decisión de despliegue, no del esquema. Ver SDD §7.1.
+  idp_sub      TEXT NOT NULL UNIQUE,
   email        TEXT NOT NULL,
   name         TEXT,
   avatar_url   TEXT,

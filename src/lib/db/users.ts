@@ -1,3 +1,4 @@
+import { identityKey } from "../../worker/access.js";
 import type { AnyContext, HouseholdContext } from "./context.js";
 
 export interface AppUser {
@@ -20,11 +21,11 @@ const id = (p: string) => `${p}_${crypto.randomUUID().replace(/-/g, "").slice(0,
  */
 export async function resolveUser(
   db: D1Database,
-  claims: { sub: string; email: string; name?: string },
+  claims: { sub?: string; email: string; name?: string },
 ): Promise<AppUser> {
   const existing = await db
-    .prepare(`select id, email, name, role, household_id from users where google_sub = ?1`)
-    .bind(claims.sub)
+    .prepare(`select id, email, name, role, household_id from users where idp_sub = ?1`)
+    .bind(identityKey(claims))
     .first<{ id: string; email: string; name: string | null; role: string; household_id: string | null }>();
   if (existing) {
     await db.prepare(`update users set last_seen_at = datetime('now') where id = ?1`)
@@ -45,9 +46,9 @@ export async function resolveUser(
     await db.batch([
       db.prepare(`insert into households (id, name) values (?1, ?2)`).bind(hid, "Mi casa"),
       db.prepare(
-        `insert into users (id, household_id, google_sub, email, name, role)
+        `insert into users (id, household_id, idp_sub, email, name, role)
            values (?1, ?2, ?3, ?4, ?5, 'owner')`,
-      ).bind(userId, hid, claims.sub, claims.email, claims.name ?? null),
+      ).bind(userId, hid, identityKey(claims), claims.email, claims.name ?? null),
     ]);
     return { id: userId, email: claims.email, name: claims.name ?? null, role: "owner", householdId: hid };
   }
@@ -65,9 +66,9 @@ export async function resolveUser(
   if (invite) {
     await db.batch([
       db.prepare(
-        `insert into users (id, household_id, google_sub, email, name, role)
+        `insert into users (id, household_id, idp_sub, email, name, role)
            values (?1, ?2, ?3, ?4, ?5, 'member')`,
-      ).bind(userId, invite.household_id, claims.sub, claims.email, claims.name ?? null),
+      ).bind(userId, invite.household_id, identityKey(claims), claims.email, claims.name ?? null),
       db.prepare(`update invites set accepted_at = datetime('now') where id = ?1`).bind(invite.id),
     ]);
     return {
@@ -78,9 +79,9 @@ export async function resolveUser(
 
   // 3. Sin invitación: usuario válido sin hogar. No se le crea uno propio.
   await db.prepare(
-    `insert into users (id, household_id, google_sub, email, name)
+    `insert into users (id, household_id, idp_sub, email, name)
        values (?1, null, ?2, ?3, ?4)`,
-  ).bind(userId, claims.sub, claims.email, claims.name ?? null).run();
+  ).bind(userId, identityKey(claims), claims.email, claims.name ?? null).run();
   return { id: userId, email: claims.email, name: claims.name ?? null, role: null, householdId: null };
 }
 

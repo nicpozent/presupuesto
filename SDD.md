@@ -882,10 +882,28 @@ falta abrirlo, y no se implementa ahora.
 
 ### 7.1 Cloudflare Access (el camino elegido)
 
-Google como IdP en Cloudflare Access, la aplicación protegida entera. El Worker recibe
+Cloudflare Access protege la aplicación entera. El Worker recibe
 `Cf-Access-Jwt-Assertion`, valida contra el JWKS del equipo y toma `email` y `sub` del
 token. No hay que escribir flujo OAuth ni manejar refresh. Limitación: la lista de
 usuarios se administra en Access, no en la app.
+
+**Qué proveedor de identidad**, en cambio, no es una decisión de diseño: es de
+despliegue, y el código no cambia entre una y otra.
+
+| Proveedor | Qué pide | Para quién |
+|---|---|---|
+| **Google** | Un cliente OAuth en Google Cloud Console: proyecto, pantalla de consentimiento *External*, origin y redirect URI exactos | Vale la pena si el login de un clic todos los días importa |
+| **One-time PIN** de Access | Nada. La lista de mails de la policy **es** el registro | Un hogar de dos o tres personas |
+
+Con OTP la persona pone su mail y recibe un código de seis dígitos. Con una duración
+de sesión larga en Access se escribe una vez por mes, no por visita. Andan los dos con
+cuentas de Gmail comunes.
+
+Lo único que cambia entre ambos es de dónde sale la identidad estable, y está resuelto
+en un solo lugar: `identityKey()` prefiere el claim `sub` del token y cae al email
+cuando el proveedor no lo manda —con OTP el email **es** la identidad—. Se guarda en
+`users.idp_sub`, que por eso no se llama `google_sub`. El Worker **no exige** `sub`:
+exigirlo ataba el producto a un proveedor OIDC sin necesidad.
 
 Consecuencias prácticas de esta decisión:
 
