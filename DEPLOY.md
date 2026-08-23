@@ -535,6 +535,15 @@ código.
 `npm run build` corre `tsc --noEmit && vite build`: si algo no tipa, el build falla y
 no se despliega. Es a propósito, igual que poner `npm test` adelante.
 
+**Las 5 vulnerabilidades que reporta `npm ci` en el build son de
+`devDependencies`** —`vitest`, `vite`, `esbuild`— y las tres son del servidor de
+desarrollo: la UI de vitest escuchando, el dev server de vite, el dev server de
+esbuild. **Nada de eso viaja al Worker**, que recibe el código compilado y los assets.
+Limpiarlas necesita saltar a `vitest@3` y `vite@7`, que hoy choca por peer
+dependencies; no vale la pena tocar la cadena de build para bajar un número que no
+tiene exposición en producción. Queda anotado y se hace cuando haya que actualizar el
+toolchain igual.
+
 **Orden recomendado (B).** El `CF_ACCESS_AUD` sale de la aplicación de Access, y la
 aplicación es más fácil de crear cuando el hostname ya existe en el DNS. Entonces:
 completá `CF_ACCESS_TEAM_DOMAIN` y `APP_URL`, desplegá con `CF_ACCESS_AUD` todavía en
