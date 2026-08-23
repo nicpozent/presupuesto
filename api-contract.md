@@ -285,6 +285,9 @@ alquiler en los dos lugares lo cuenta dos veces sin que se note en la pantalla.
 ```
 ### `POST /api/goals` · `PATCH /api/goals/:id` · `DELETE /api/goals/:id`
 
+`savedCents` es carga manual del usuario (`SDD.md` §4.5). Brote no lo deduce del
+flujo de caja ni lo mueve solo.
+
 ---
 
 ## Precios
@@ -308,7 +311,16 @@ alquiler en los dos lugares lo cuenta dos veces sin que se note en la pantalla.
 }
 ```
 Cada precio trae `checkedAt`, `source` y `stale`. Si `stale` es `true` la UI muestra
-la antigüedad; nunca se omite el precio ni se reemplaza por una estimación.
+la antigüedad; nunca se omite el precio ni se reemplaza por una estimación. `stale` lo
+escribe el cron —último intento fallido, o el doble de la cadencia del hogar sin éxito
+(`SDD.md` §6)— y el cliente solo lo lee.
+
+**Los endpoints con `:id` de producto validan el dueño.** `GET
+/api/watch/items/:id/history`, `PUT /api/watch/items/:id/urls` y
+`POST /api/watch/items/:id/refresh` resuelven el `watched_items.household_id` antes de
+tocar `item_prices` o `item_urls`, que no tienen `household_id` propio. Un `:id` de
+otro hogar responde `404 not_found`, no `403`: no se confirma que el id exista
+(`SDD.md` §13.3).
 
 ### `POST /api/watch/items`
 `{ "name": "…", "unit": "1 L", "targetCents": 500000, "retailerIds": ["coto","diarco"] }`

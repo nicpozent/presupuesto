@@ -122,6 +122,10 @@ CREATE TABLE income_history (
   amount_cents INTEGER NOT NULL,
   PRIMARY KEY (household_id, year, month)
 );
+-- Quién la escribe: SDD §5.0, igual que month_totals. Se recalcula al tocar incomes,
+-- del mes del cambio hacia adelante. Un mes ya cerrado NO se reescribe: si el sueldo
+-- sube en agosto, marzo sigue diciendo lo que se cobró en marzo. En eso está todo el
+-- valor de la curva de poder de compra de §4.4.
 
 CREATE TABLE fixed_expenses (
   id           TEXT PRIMARY KEY,
@@ -157,7 +161,7 @@ CREATE TABLE goals (
   household_id  TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
   name          TEXT NOT NULL,
   target_cents  INTEGER NOT NULL,
-  saved_cents   INTEGER NOT NULL DEFAULT 0,
+  saved_cents   INTEGER NOT NULL DEFAULT 0,  -- carga manual; Brote no lo deduce (§4.5)
   target_date   TEXT,
   note          TEXT
 );
@@ -226,6 +230,12 @@ CREATE INDEX idx_items_stale ON watched_items(household_id, last_checked_at);
 
 -- Un precio SIEMPRE lleva comercio, fecha de consulta y fuente.
 -- Ver CLAUDE.md regla 5: nunca un precio sin procedencia.
+--
+-- AISLAMIENTO: esta tabla NO tiene household_id y NO es contexto público. Son datos
+-- del hogar que llegan por item_id. Toda lectura o escritura resuelve primero el
+-- watched_items.household_id: join a watched_items con el filtro puesto, nunca
+-- "where item_id = ?" a secas. Vale igual para item_urls, item_alternatives y
+-- price_fetch_log. Ver SDD §3 y §13.3.
 CREATE TABLE item_prices (
   id          TEXT PRIMARY KEY,
   item_id     TEXT NOT NULL REFERENCES watched_items(id) ON DELETE CASCADE,
@@ -236,6 +246,8 @@ CREATE TABLE item_prices (
   -- 'receipt' es válido acá y no en el adaptador: ese precio lo trae el OCR (§10).
   source      TEXT NOT NULL CHECK (source IN ('api','scrape','llm','manual','receipt')),
   url         TEXT,
+  -- Lo escribe el cron, no la UI: último intento fallido, o el doble de la cadencia
+  -- del hogar sin consulta exitosa (SDD §6 y §6.3). Una consulta OK lo vuelve a 0.
   stale       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX idx_prices_item_time ON item_prices(item_id, checked_at DESC);

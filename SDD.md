@@ -88,11 +88,23 @@ Reglas transversales: importes en `INTEGER` de centavos; fechas en ISO 8601 UTC;
 toda tabla **de datos del hogar** lleva `household_id` y se filtra por él en cada
 query, con el mecanismo de §13.3 para que eso sea cierto y no una intención.
 
-Las excepciones son explícitas y son cuatro: `fx_rates`, `inflation` y las filas de
-`retailers` de fábrica (`household_id IS NULL`), que son contexto público y el mismo
-para todos los hogares; y `job_runs`, que no habla del hogar sino de Brote (§13.2).
-Cualquier tabla nueva sin `household_id` necesita justificarse acá o es un bug de
-aislamiento.
+Ocho tablas no llevan `household_id`, y **no son todas la misma clase de excepción**.
+Confundirlas es un bug de aislamiento, así que van separadas:
+
+| Clase | Tablas | Cómo se aísla |
+|---|---|---|
+| **Contexto público**, igual para todos los hogares | `fx_rates`, `inflation` | No hace falta aislar: no hay dato de nadie |
+| **Sobre Brote, no sobre el hogar** | `job_runs` (§13.2) | Ídem |
+| **La tabla del hogar** | `households` | Su `id` *es* el hogar |
+| **Hijas de `watched_items`**, heredan el hogar por su padre | `item_prices`, `item_urls`, `item_alternatives`, `price_fetch_log` | **Sí hace falta aislar**: por el `household_id` del `watched_items` al que apuntan (§13.3) |
+
+`retailers` es aparte: tiene `household_id` **nullable**, y `NULL` significa "de
+fábrica, lo ve todo el mundo".
+
+La cuarta fila es la peligrosa. `item_prices` son datos del hogar tanto como sus
+movimientos —qué productos sigue, a qué precio los compra— y llegan al hogar solo a
+través de `item_id`. Tratarlas como contexto público es una fuga. Cualquier tabla
+nueva sin `household_id` tiene que decir en cuál de estas clases cae, o es un bug.
 
 ## 4. Vistas
 
@@ -236,6 +248,14 @@ de plazo fijo y FCI.
 
 Sobres por categoría con barra de consumo y presupuesto editable; agregar categoría;
 objetivos de ahorro con meta, acumulado y fecha.
+
+**Objetivos: el acumulado lo pone el usuario.** `saved_cents` es carga manual y Brote
+no lo deduce del flujo de caja. Tenía sentido preguntárselo —el KPI de §4.1.1 y los
+insights de §4.2.1 sí se calculan— así que queda dicho: lo que un hogar apartó para
+un objetivo no es inferible de la diferencia entre lo que entró y lo que gastó, y
+adivinarlo sería un número inventado en una pantalla de ahorro. La barra de progreso
+es `saved_cents / target_cents`, sin ajuste por inflación en el acumulado y con la
+meta expresada en pesos del día en que se fijó.
 
 **Cuotas: una sola verdad.** `started_on` y `count_total` son el calendario, y de
 ahí sale todo: qué meses tienen cuota (término D de §5.0) y cuántas van pagadas
@@ -473,10 +493,26 @@ el mes afectado:
 | Alta, edición o baja de `recurring_rules` | desde el mes de inicio de la regla hasta el horizonte de proyección |
 | Alta, edición o baja de `fixed_expenses` | el mes en curso hasta el horizonte |
 | Cambio en `installments` | los meses con cuota vencida |
+| Alta, edición o baja de `incomes` | `income_history`, del mes del cambio hacia adelante |
 
 El horizonte de proyección son los 12 meses adelante que ofrece el selector de
 §4.1. Un mes sin ningún dato **no tiene fila**: eso es distinto de una fila en cero,
 y la diferencia importa (§5.1 y §12.2).
+
+**`income_history` tiene el mismo problema y la misma solución.** Es el ingreso total
+del hogar mes a mes, y de ahí sale el poder de compra del sueldo de §4.4: sin él, esa
+curva no tiene con qué dibujarse. Nadie decía quién la escribe.
+
+```
+recomputeIncomeHistory(hogar, y, m):
+  amount_cents = Σ incomes.amount_cents de los ingresos vigentes en el mes
+```
+
+Se recalcula al dar de alta, editar o borrar un ingreso, desde el mes del cambio
+hacia adelante hasta el horizonte. Un mes ya cerrado **no se reescribe**: si en marzo
+el hogar cobró lo que cobró, subir el sueldo en agosto no cambia marzo. Es
+exactamente lo que hace valiosa a la curva —muestra que el sueldo quedó quieto
+mientras los precios subían— y reescribir el pasado la borraría.
 
 ### 5.1 Total mensual — fuente única
 
@@ -625,6 +661,20 @@ Todo el trabajo de red se ejecuta en Cron, en lotes de 40 productos ordenados po
 `last_checked_at` (ver `DEPLOY.md` §5); nunca en el request del usuario. Cada precio
 se guarda con comercio, fecha de consulta y fuente. Si una consulta falla, se
 conserva el precio anterior, se marca `stale` y la UI muestra su antigüedad.
+
+**Cuándo un precio es `stale`**, porque de esto depende lo que la pantalla dice y no
+estaba definido. El cron lo escribe, no la UI, y hay dos causas:
+
+1. **El último intento falló.** El precio anterior queda `stale = 1` en el momento en
+   que la consulta falla, con su fila en `price_fetch_log`. No importa la antigüedad:
+   sabemos que hoy no pudimos confirmarlo.
+2. **Pasó el doble de la cadencia del hogar** sin una consulta exitosa: más de dos
+   días en `daily`, más de catorce en `weekly` (§6.3). Un precio de ayer en un hogar
+   `weekly` **no** es `stale`; uno de tres semanas sí.
+
+Un precio `stale` no se oculta ni se reemplaza: se muestra con su antigüedad, que es
+la regla 5. Y una consulta exitosa lo vuelve a poner en `0` — es la única cosa que
+lo limpia.
 
 Un adaptador por comercio, todos con la misma interfaz, para poder cambiar de método
 sin tocar el resto:
@@ -884,7 +934,10 @@ en el Worker en streaming. Nombres de archivo `brote-<vista>-<período>.csv`.
 3. El Worker llama a **Cohere** dentro del mismo request, con timeout: extrae
    comercio, fecha, total y líneas.
 4. El usuario **confirma o corrige** antes de que se cree el movimiento; nunca se
-   crea automáticamente.
+   crea automáticamente. El vínculo queda de los dos lados —`receipts.transaction_id`
+   y `transactions.receipt_id`— y los dos se escriben en el **mismo batch de D1**.
+   `receipts.transaction_id` es el autoritativo: si alguna vez discrepan, el
+   back-pointer de `transactions` es el que está mal.
 5. Los productos detectados se ofrecen como sugerencias para seguir precio.
 6. **La imagen la borra el usuario cuando quiere, y el borrado es real**: se va la
    fila y se va el objeto en R2. No hay descarte automático a los 30 días ni a
@@ -1057,9 +1110,20 @@ El mecanismo:
 - El contexto sale del JWT validado (§7.1), nunca del body ni del query string.
   `api-contract.md` ya lo dice del lado de la API: ningún endpoint acepta
   `householdId` del cliente. Esta es la misma regla del lado de los datos.
-- Las cuatro tablas sin `household_id` (§3) son la excepción declarada y las
-  funciones que las leen viven aparte, en `src/lib/db/public/`, para que se vea que
-  son otra cosa.
+- En `src/lib/db/public/` van **solo** las tablas de contexto y de Brote: `fx_rates`,
+  `inflation`, `job_runs`. Nada más. Son las únicas que se pueden leer sin un hogar.
+- **Las hijas de `watched_items` no van ahí** (§3). `item_prices`, `item_urls`,
+  `item_alternatives` y `price_fetch_log` son datos del hogar que llegan por
+  `item_id`, así que toda función que las toque recibe el `HouseholdContext` y
+  **resuelve el padre primero**: el `item_id` se valida contra
+  `watched_items.household_id` antes de leer o escribir la hija. En SQL, un `join` a
+  `watched_items` con el filtro puesto; nunca `where item_id = ?` a secas.
+
+  Esto no es teórico. `GET /api/watch/items/:id/history` y
+  `PUT /api/watch/items/:id/urls` reciben el id en la URL: si la consulta filtra solo
+  por `item_id`, cualquier hogar lee el historial de precios de otro cambiando un
+  número en la dirección. El test que lo cubre pide el `:id` de un hogar con el token
+  de otro y exige `404`, no `403`: que ni siquiera confirme que el id existe.
 
 ### 13.4 Decisiones abiertas
 
