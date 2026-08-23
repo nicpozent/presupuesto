@@ -77,7 +77,7 @@ Esquema ejecutable en `schema.sql`. Resumen de tablas:
 | `month_totals` | **Total de gasto por mes: la fuente única de §5.1.** Cómo se calcula, en §5.0 |
 | `receipts` | Foto de ticket: clave R2, estado de OCR, transacción resultante |
 | `alerts` | Alerta generada: tipo, payload, leída |
-| `alert_prefs` | Días de anticipación, umbral de baja de precio, frecuencia de consulta |
+| `alert_prefs` | Las seis preferencias que edita Conexiones y que gobiernan Avisos: días de anticipación, umbral de baja, frecuencia de consulta, hora de envío, correo, notificación y resumen semanal (§4.6, §4.9) |
 | `job_runs` | Última corrida de cada trabajo de fondo, para saber si un cron dejó de andar (§13.2) |
 | `audit_log` | Acciones sensibles: borrado, exportación, cambio de conexión |
 
@@ -295,11 +295,13 @@ Nada de análisis, nada de configuración, nada de edición de reglas.
 
 Dos cosas que salen de acá y valen para todo el producto:
 
-- **"El teléfono pide permiso. La foto se descarta a los 30 días."** Es una promesa
-  al usuario, así que es un requisito: las fotos de tickets se borran —fila y objeto
-  en R2— a los 30 días de subidas, con un barrido en el cron diario. Está en §10 y en
-  la pantalla de privacidad. Prometerlo en el teléfono y no borrarlo es la clase de
-  cosa que no se arregla con un cambio de copy.
+- La pantalla pide permiso de cámara con la copy del prototipo: "El teléfono pide
+  permiso. La foto se descarta a los 30 días." **La foto no se descarta sola**: el
+  requisito del producto es el borrado que hace el usuario, real y con el objeto de
+  R2 incluido (§10, y la sección Privacidad de `CLAUDE.md`). Esa frase del prototipo
+  promete algo que el producto no hace, y aparece en tres lugares: acá, en el diálogo
+  de registrar compra y en Conexiones. Es una decisión pendiente, en §13.4, y no se
+  resuelve inventando un barrido.
 - El total del mes y los sobres del teléfono salen de las mismas respuestas que el
   escritorio (§5.0, §5.1). El teléfono **no** tiene su propio cálculo: sería la
   cuarta pantalla del test de número único de §13.6.
@@ -775,12 +777,13 @@ en el Worker en streaming. Nombres de archivo `brote-<vista>-<período>.csv`.
 4. El usuario **confirma o corrige** antes de que se cree el movimiento; nunca se
    crea automáticamente.
 5. Los productos detectados se ofrecen como sugerencias para seguir precio.
-6. La imagen se puede borrar y el borrado elimina el objeto en R2.
-7. **A los 30 días la imagen se borra sola**, fila y objeto en R2, en un barrido del
-   cron diario. No es una mejora opcional: la pantalla del teléfono se lo promete al
-   usuario con esas palabras (§4.8). El movimiento que salió del ticket queda; la
-   foto no. Un `receipts` con `deleted_at` y el objeto todavía en R2 es un bug de
-   privacidad, y el test que lo cubre va con el barrido.
+6. **La imagen la borra el usuario cuando quiere, y el borrado es real**: se va la
+   fila y se va el objeto en R2. No hay descarte automático a los 30 días ni a
+   ningún plazo; la foto vive hasta que alguien la borra o hasta que se borra el
+   hogar entero. El movimiento que salió del ticket sobrevive al borrado de la foto.
+   Una fila de `receipts` con `deleted_at` y el objeto todavía en R2 es un bug de
+   privacidad, y el test que lo cubre va con el borrado (sección Privacidad de
+   `CLAUDE.md`: "implementar el borrado de verdad, incluyendo objetos en R2").
 
 Nada de la foto sale de la infraestructura del proyecto salvo hacia Cohere, que es
 el proveedor de OCR y el mismo que lee precios en HTML (§6.1). **Se nombra en la
@@ -951,14 +954,23 @@ El mecanismo:
 
 ### 13.4 Decisiones abiertas
 
-Una. Las otras dos que estaban acá se cerraron: la vía de cada comercio de fábrica
-quedó resuelta en §6.2, y las pantallas que faltaban están escritas (§4.6 y §4.8).
+Dos. De las tres que estaban acá se cerraron dos —la vía de cada comercio de
+fábrica quedó resuelta en §6.2 y las pantallas que faltaban están escritas (§4.6 y
+§4.8)—, y al escribirlas apareció una nueva, la de la foto.
 
 1. **El insight de suscripciones** (§4.2). Brote ve el cargo, no el uso. O el usuario
    marca a mano una suscripción como sin usar, o el insight se reformula sobre lo
    observable —el cargo subió más que el IPC, o viene cobrándose seis meses sin que
    nadie lo toque— y se cambia la copy del prototipo. Hasta que se decida, no se
    implementa la afirmación de uso.
+2. **La copy que promete que la foto se descarta a los 30 días.** Está en tres
+   lugares del prototipo —la pantalla de cámara del teléfono, el diálogo de registrar
+   compra y Conexiones— y el producto no lo hace: el borrado es del usuario (§10). Las
+   dos salidas son válidas y ninguna es de ingeniería: implementar el descarte
+   automático, o cambiar las tres frases. Lo que no se puede es dejarlo así, porque
+   es una promesa de privacidad que no se cumple. Mientras no se decida, el
+   documento dice lo que el producto hace, no lo que la pantalla promete.
+
 Lo que **no** es una decisión abierta, aunque lo parezca: revisar los términos de uso
 de cada comercio antes de encenderlo (§6.2). Eso es un paso del procedimiento, con su
 default en apagado y su registro en `audit_log`; no bloquea escribir el código.

@@ -302,9 +302,10 @@ CREATE TABLE receipts (
   ocr_payload   TEXT,                        -- JSON crudo del OCR
   transaction_id TEXT REFERENCES transactions(id) ON DELETE SET NULL,
   uploaded_at   TEXT NOT NULL DEFAULT (datetime('now')),
-  -- El teléfono promete "la foto se descarta a los 30 días" (SDD §4.8), así que es
-  -- un requisito: el cron diario barre lo que pasó los 30 días y borra fila y objeto
-  -- en R2. La transacción que salió del ticket queda; la imagen no.
+  -- La foto NO se descarta sola. La borra el usuario, y el borrado es real: se va
+  -- la fila y se va el objeto en R2. La transacción que salió del ticket queda.
+  -- Ojo: la copy del prototipo promete un descarte a los 30 días que el producto no
+  -- hace; es una decisión pendiente, SDD §13.4.
   deleted_at    TEXT                         -- borrado real: también el objeto en R2
 );
 
