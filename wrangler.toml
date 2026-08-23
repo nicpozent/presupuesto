@@ -1,0 +1,89 @@
+# Brote — configuración de Cloudflare Workers
+#
+# ESTE ARCHIVO VA EN EL REPO. No es opcional: si desplegás desde el panel de
+# Cloudflare (Workers Builds), el deploy corre `npx wrangler deploy` y de acá saca
+# el nombre del Worker y todos los bindings. Sin este archivo no hay deploy.
+#
+# Hay TRES valores para reemplazar antes del primer deploy. Ninguno es secreto
+# —son identificadores de tu cuenta, no credenciales— así que se commitean:
+#
+#   1. database_id     → panel: Storage & Databases → D1 → brote → Database ID
+#   2. id (del KV)     → panel: Storage & Databases → KV → brote-cache → Namespace ID
+#   3. CF_ACCESS_AUD   → panel: Zero Trust → Access → Applications → Brote →
+#                        Overview → Application Audience (AUD) Tag
+#
+# Los secretos NO van acá. El único de la v1 es COHERE_API_KEY, y va en el panel:
+# Workers & Pages → brote → Settings → Variables and Secrets → Add → tipo Secret.
+#
+# Ver DEPLOY.md §10 para el paso a paso desde el panel.
+
+name = "brote"
+main = "src/worker/index.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# El build lo dispara wrangler, no el panel. Con esto, `npx wrangler deploy` compila
+# la SPA antes de subir, así que funciona aunque el campo "Build command" de Workers
+# Builds esté vacío. El npm ci va acá porque el entorno del build no instala solo.
+# Ver DEPLOY.md §10.5.
+[build]
+command = "npm ci && npm test && npm run build"
+
+# La SPA compilada se sirve desde el mismo Worker: sin CORS, sin dominio aparte.
+[assets]
+directory = "./dist/client"
+not_found_handling = "single-page-application"
+
+# Login por Cloudflare Access: no hay client id ni secret de Google acá.
+# CF_ACCESS_TEAM_DOMAIN y CF_ACCESS_AUD son públicos y sirven para validar el JWT.
+[vars]
+APP_URL = "https://brote.example.com"
+CF_ACCESS_TEAM_DOMAIN = "tu-equipo.cloudflareaccess.com"
+CF_ACCESS_AUD = "REEMPLAZAR"
+DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires"
+IPC_PROJECTED_MONTHLY_PCT = "2.0"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "brote"
+database_id = "2bfee7e9-6d2b-447d-bdcf-94ba57ffe8d0"
+
+# Cache caliente de cotizaciones e IPC. D1 es la fuente de verdad; KV es cache.
+# TTLs en SDD §6, presupuesto de escrituras en DEPLOY.md §9.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "be3651bc55ee4479930a66bd68a31614"
+
+# No hay binding PAGES para cachear HTML: gastaba una escritura de KV por página y
+# el plan gratuito da 1.000 por día. Los precios viven en D1. Ver DEPLOY.md §9.
+
+[[r2_buckets]]
+binding = "RECEIPTS"
+bucket_name = "brote-receipts"
+
+# Sin Queues: el trabajo periódico lo hace el handler scheduled.
+# Ver DEPLOY.md §5 para los lotes de precios y §9 para los límites del plan gratuito.
+
+# Horarios en UTC. ART = UTC-3.
+# El lote se mide en PARES producto-comercio: 40 por corrida, para no pasar los 50
+# subrequests del plan gratuito.
+[triggers]
+crons = [
+  "0 14 * * *",    # 11:00 ART — cotizaciones BNA + xe
+  "0 */6 * * *",   # cada 6 h — refresco de precios de productos seguidos
+  "0 15 15 * *",   # día 15, 12:00 ART — IPC del INDEC
+  "0 12 * * *"     # 9:00 ART — alertas, y el vigilante de job_runs (SDD §13.2)
+]
+
+[observability]
+enabled = true
+
+# Staging. Ojo: definir un environment hace que `wrangler deploy` sin --env avise
+# "no target environment was specified". Es solo un aviso y despliega producción, que
+# es lo que hace el panel. Para staging el comando es `wrangler deploy --env staging`,
+# y necesita sus propios ids de D1/KV. Si no vas a usar staging, borrá este bloque y
+# el aviso desaparece. Ver DEPLOY.md §6.
+[env.staging]
+name = "brote-staging"
+[env.staging.vars]
+APP_URL = "https://staging.brote.example.com"

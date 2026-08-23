@@ -1,5 +1,38 @@
 # Handoff: Brote — presupuesto personal con seguimiento de precios
 
+## Estado del código
+
+Etapa 1 de `SDD.md` §14, andando y desplegable. Lo que hay:
+
+| Qué | Dónde |
+|---|---|
+| Worker con Hono, assets de la SPA, `scheduled` con contabilidad en `job_runs` | `src/worker/` |
+| Validación del JWT de Access con WebCrypto, sin dependencias | `src/worker/access.ts` |
+| Aislamiento por hogar: `HouseholdContext` como primer parámetro, `assertOwnsItem` para las tablas hijas | `src/lib/db/` |
+| Las únicas tablas que se leen sin hogar | `src/lib/db/public/` |
+| Matemática de §5: `monthNominal`, `adjust`, `monthFactor`, `realChange`, la derivación de `month_totals` | `src/lib/finance/` |
+| Formato es-AR en un solo lugar | `src/lib/format.ts` |
+| SPA con los tokens de §11 y el estado "todavía no estás en un hogar" | `src/client/` |
+| Esquema como migración | `migrations/0001_init.sql` |
+
+**32 tests**, uno por regla del dominio y cuatro que hacen cumplir el aislamiento de
+§13.3 recorriendo el árbol.
+
+```bash
+npm install
+npm run typecheck
+npm test
+npm run db:local     # aplica la migración a la D1 local
+npm run dev          # SPA en :5173, Worker en :8787
+```
+
+Para desplegar, `DEPLOY.md`. Los límites reales del plan gratuito están en su §9, y no
+son los que decía la documentación anterior.
+
+Lo que **no** está todavía: las nueve vistas de §4 más allá del esqueleto, los
+adaptadores de precios (§6.2), el OCR (§10) y los cron con trabajo de verdad adentro.
+El orden está en §14.
+
 ## Qué es esto
 
 Paquete de handoff para implementar **Brote** en un codebase real, desplegado en
@@ -58,7 +91,7 @@ prototipo. Los diálogos están recortados a su propio marco, a 2x.
 |---|---|
 | `01-resumen.png` | Resumen — KPIs, serie nominal vs. real, proyección, cierre de mes |
 | `02-analisis-gastos.png` | Análisis de gastos — tabla de categorías, insights, suscripciones |
-| `03-movimientos-mes.png` | Movimientos — "Quién gastó qué", libro del mes, filtros, histórico 44 meses |
+| `03-movimientos-mes.png` | Movimientos — "Quién gastó qué", libro del mes, filtros, selector de 44 meses |
 | `04-movimientos-anual.png` | Movimientos → Por año — resumen anual y exportación |
 | `05-ingresos-compromisos.png` | Ingresos, vencimientos, cuotas por producto, aguinaldo, plata quieta |
 | `06-presupuesto-objetivos.png` | Sobres, administración de categorías, objetivos con dueño |
@@ -67,7 +100,7 @@ prototipo. Los diálogos están recortados a su propio marco, a 2x.
 | `09-precios-lista-compras.png` | Lista de compras por comercio |
 | `10-precios-avisos.png` | Avisos de baja de precio y de vencimientos |
 | `11-divisas-inflacion.png` | USD/EUR/CHF (BNA y xe.com) e inflación |
-| `12-en-el-telefono.png` | Las cuatro acciones móviles |
+| `12-en-el-telefono.png` | Presentación del diseño responsive: las cuatro pantallas que llegan al teléfono. No es una vista de la app (`SDD.md` §4.8) |
 | `13-conexiones.png` | Fuentes de datos, comercios propios, privacidad, alertas |
 | `14-ayuda.png` | Centro de ayuda — 29 temas en 7 secciones |
 | `15-onboarding.png` | Guía de configuración, tres pasos |
@@ -75,17 +108,19 @@ prototipo. Los diálogos están recortados a su propio marco, a 2x.
 | `17-dialogo-editar-movimiento.png` | Diálogo de edición con persona y regla recurrente |
 | `18-perfil-valentina.png` | La misma pantalla filtrada por persona |
 
-## Autenticación con Google: sí
+## Autenticación con Google: sí, por Cloudflare Access
 
-Google es la única opción de login que hace falta, y en Cloudflare el camino corto
-es **Cloudflare Access con Google como proveedor de identidad**: el Worker recibe el
-JWT `Cf-Access-Jwt-Assertion` ya validado por el borde y no hay que escribir flujo
-OAuth. Sirve bien para un hogar o un piloto cerrado.
+**Decidido: Cloudflare Access con Google como proveedor de identidad.** El Worker
+recibe el JWT `Cf-Access-Jwt-Assertion`, lo valida contra el JWKS del equipo en cada
+request, y no hay flujo OAuth propio, ni tabla `sessions`, ni refresh tokens. Brote
+es para un hogar: no hay registro abierto.
 
-Para producto abierto conviene **OAuth 2.0 + PKCE contra Google directamente** dentro
-del Worker, con la sesión en una cookie `HttpOnly; Secure; SameSite=Lax` firmada, y el
-`refresh_token` cifrado en D1. `SDD.md` §7 tiene el flujo completo, los scopes y el
-manejo de sesión; `api-contract.md` los endpoints `/auth/*`.
+Ojo con lo que Access **no** resuelve: decide quién llega a la app, no a qué hogar
+pertenece. Sumar a alguien son dos pasos —el mail en la policy de Access y la
+invitación en Brote— y `SDD.md` §7.1.1 tiene el flujo.
+
+Para el día que haga falta abrirlo, `SDD.md` §7.2 documenta OAuth 2.0 + PKCE
+completo: flujo, scopes y manejo de sesión. Está escrito y **no** implementado.
 
 ## Lo primero que hay que decidir con el usuario
 

@@ -29,15 +29,14 @@ binding = "DB"
 database_name = "brote"
 database_id = "REEMPLAZAR"
 
-# Cache de datos externos. TTLs en SDD §6.
+# Cache caliente de cotizaciones e IPC. D1 es la fuente de verdad; KV es cache.
+# TTLs en SDD §6, presupuesto de escrituras en DEPLOY.md §9.
 [[kv_namespaces]]
 binding = "CACHE"
 id = "REEMPLAZAR"
 
-# HTML de páginas de producto, para no pagar dos veces la misma lectura
-[[kv_namespaces]]
-binding = "PAGES"
-id = "REEMPLAZAR"
+# No hay binding PAGES para cachear HTML: gastaba una escritura de KV por página y
+# el plan gratuito da 1.000 por día. Los precios viven en D1. Ver DEPLOY.md §9.
 
 [[r2_buckets]]
 binding = "RECEIPTS"

@@ -67,9 +67,14 @@ No le pidas "hacé la app". Pedile una etapa, con criterio de terminado:
 > Leé CLAUDE.md, docs/SDD.md completo y mirá docs/screenshots/.
 > Vamos a construir Brote por etapas; hoy solo la etapa 1.
 >
-> Etapa 1: Worker con Hono + SPA de React con Vite servida como assets del mismo
-> Worker + D1 con schema.sql aplicado + login con Google. Nada de pantallas de
-> producto todavía: alcanza con entrar, ver el nombre del hogar y salir.
+> Etapa 1 **ya está hecha** y anda: Worker con Hono, SPA de React con Vite servida
+> como assets del mismo Worker, la migración aplicada, Access validando el JWT en cada
+> request, el acceso a datos de SDD §13.3 con sus tests, y el caso del usuario que
+> pasó Access y todavía no tiene hogar. Ver "Estado del código" en README.md.
+>
+> Arrancá por la etapa 2: categorías, movimientos manuales, reglas recurrentes y
+> month_totals con su recálculo. La matemática de §5 ya está escrita y testeada en
+> src/lib/finance/: usala, no la vuelvas a escribir.
 >
 > Antes de escribir código mostrame la estructura de carpetas que proponés y
 > esperá que la apruebe.
