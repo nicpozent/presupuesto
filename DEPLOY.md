@@ -496,16 +496,37 @@ problema. Si algo de esto fuera secreto, no iría en un archivo del repo.
 | Campo | Valor |
 |---|---|
 | Worker name | `brote` — **tiene que coincidir** con `name` en `wrangler.toml` o el build falla |
-| Build command | `npm run build` |
+| Build command | `npm ci && npm test && npm run build` |
 | Deploy command | `npx wrangler deploy` (es el default) |
 | Root directory | vacío |
+
+**El Build command no es opcional y el `npm ci` tampoco.** Dejarlo vacío es el error
+más fácil de cometer acá: el build salta directo al deploy, `dist/client` no existe y
+wrangler corta con
+
+```
+✘ [ERROR] Could not detect a directory containing static files
+          (e.g. html, css and js) for the project
+```
+
+que no dice "te falta el build". Y el `npm ci` explícito hace falta porque el entorno
+no instala las dependencias solo: sin él, `npm run build` no encuentra ni `vite` ni
+`tsc`.
 
 La versión de Node la fija `.node-version` (22), que es la que se verificó. Si el panel
 usara otra, el build de Vite puede fallar por algo que no tiene nada que ver con tu
 código.
 
 `npm run build` corre `tsc --noEmit && vite build`: si algo no tipa, el build falla y
-no se despliega. Es a propósito.
+no se despliega. Es a propósito, igual que poner `npm test` adelante.
+
+**Orden recomendado (B).** El `CF_ACCESS_AUD` sale de la aplicación de Access, y la
+aplicación es más fácil de crear cuando el hostname ya existe en el DNS. Entonces:
+completá `CF_ACCESS_TEAM_DOMAIN` y `APP_URL`, desplegá con `CF_ACCESS_AUD` todavía en
+`REEMPLAZAR` —el Worker va a rechazar todo con `401`, que es lo correcto—, agregá el
+custom domain, recién ahí creá la aplicación de Access eligiendo el hostname del
+desplegable, y pusheá el AUD. Workers Builds vuelve a desplegar solo. Son dos builds y
+no cuestan nada; a cambio, ningún hostname se tipea a mano.
 
 ### 10.6 El secreto
 
