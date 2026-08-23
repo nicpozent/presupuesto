@@ -72,6 +72,11 @@ crons = [
 [observability]
 enabled = true
 
+# Staging. Ojo: definir un environment hace que `wrangler deploy` sin --env avise
+# "no target environment was specified". Es solo un aviso y despliega producción, que
+# es lo que hace el panel. Para staging el comando es `wrangler deploy --env staging`,
+# y necesita sus propios ids de D1/KV. Si no vas a usar staging, borrá este bloque y
+# el aviso desaparece. Ver DEPLOY.md §6.
 [env.staging]
 name = "brote-staging"
 [env.staging.vars]

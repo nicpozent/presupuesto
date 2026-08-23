@@ -478,6 +478,10 @@ problema. Si algo de esto fuera secreto, no iría en un archivo del repo.
 | Deploy command | `npx wrangler deploy` (es el default) |
 | Root directory | vacío |
 
+La versión de Node la fija `.node-version` (22), que es la que se verificó. Si el panel
+usara otra, el build de Vite puede fallar por algo que no tiene nada que ver con tu
+código.
+
 `npm run build` corre `tsc --noEmit && vite build`: si algo no tipa, el build falla y
 no se despliega. Es a propósito.
 
