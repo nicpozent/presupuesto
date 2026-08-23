@@ -108,7 +108,7 @@ nueva sin `household_id` tiene que decir en cuál de estas clases cae, o es un b
 
 ## 4. Vistas
 
-**Diez** entradas de navegación, barra lateral fija de 252px. El contenido tiene
+**Nueve** entradas de navegación, barra lateral fija de 252px. El contenido tiene
 `max-width: 1180px`. Todas las medidas son las del prototipo a 1440px.
 
 El orden de la navegación es el del prototipo y no es alfabético ni arbitrario —va
@@ -123,12 +123,17 @@ de lo general a lo periférico— así que se respeta:
 | 5 | `budgets` | Presupuesto y objetivos | §4.5 |
 | 6 | `watch` | Precios | §4.6 |
 | 7 | `markets` | Divisas e inflación | §4.7 |
-| 8 | `mobile` | En el teléfono | §4.8 |
-| 9 | `connections` | Conexiones | §4.9 |
-| 10 | `help` | Ayuda | §4.10 |
+| 8 | `connections` | Conexiones | §4.9 |
+| 9 | `help` | Ayuda | §4.10 |
 
 `onboarding` (§4.11) no está en la navegación. **Precios lleva un badge** con la
 cantidad de avisos sin leer; es la única entrada que lo lleva.
+
+**`mobile` del prototipo no es una entrada de navegación.** Era la forma de presentar
+el diseño del teléfono para revisarlo, no una pantalla que alguien visite: por eso es
+una página de escritorio, con la barra lateral puesta, que muestra marcos de iPhone.
+Lo que sí hay que construir es el comportamiento responsive de las pantallas que ya
+existen, y eso está en §4.8. La navegación de producción no la incluye.
 
 `18-perfil-valentina.png` no tiene sección propia: es Movimientos filtrado por
 persona (§4.3). Los screenshots `16` y `17` son los diálogos de §4.3.
@@ -187,13 +192,22 @@ comercio más barato de un producto baja el número: si no lo baja, está mal.
     de los últimos seis meses en pesos constantes (§5.3). Derivable hoy.
   - *Cambio de comercio sugerido*: mismo producto, comercio más barato entre las
     fuentes habilitadas. Derivable hoy, sale de los mismos precios que §4.1.1.
-  - *Suscripciones*: **pendiente de decisión de producto.** El prototipo dice
-    "sin uso desde hace 60 días", y Brote no tiene señal de uso: ve el cargo, no si
-    alguien mira Disney+. Lo que sí es derivable de `recurring_rules` es un cargo
-    que subió más que el IPC del período, o que viene cobrándose desde hace seis
-    meses sin que nadie lo haya tocado. Hasta que se resuelva, no se implementa el
-    insight con la afirmación de uso: el alerta `subscription_idle` queda definida
-    sobre lo observable y la copy de "sin uso" no se usa. Ver §13.4.
+  - *Suscripciones a revisar*: **reformulado sobre lo observable**, decidido. El
+    prototipo decía "Dos suscripciones sin uso desde hace 60 días… no registran
+    actividad del hogar", y Brote no tiene señal de uso: ve el cargo, no si alguien
+    mira Disney+. Afirmar el uso era afirmar algo que el producto no sabe. Dos
+    disparadores, los dos derivables de `recurring_rules`:
+    - **El cargo subió más que la inflación del período**: el importe de la regla
+      creció por encima de `(1 + IPC acumulado)` desde el último cambio de importe.
+    - **Viene cobrándose seis meses sin que nadie la toque**: la regla tiene seis
+      ocurrencias o más y el hogar nunca la editó ni la confirmó.
+
+    La tarjeta dice el hecho, no la conjetura: "Netflix subió 38% desde marzo, arriba
+    del 21% de inflación del período" o "Spotify se viene cobrando desde febrero y
+    nunca la revisaste". La copy de "sin uso" **no se usa**: es la segunda excepción a
+    la regla de copy literal, por el mismo motivo que la de la foto (§4.8).
+    El tipo de alerta pasa a llamarse `subscription_review`: `subscription_idle`
+    nombraba justamente lo que no se puede observar.
 - **Aumento por unidad**: producto, precio anterior, precio actual, variación.
   Grilla `minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)`.
 
@@ -206,7 +220,7 @@ y se resuelve igual: **se deriva o no se muestra.**
 |---|---|
 | Desvío contra el promedio | `max(0, gastoDelMes − promedioDeLaCategoría)`, en pesos constantes (§5.3). Es lo que costó el desvío, no una promesa |
 | Cambio de comercio | `(precioEnElComercioHabitual − mejorPrecioHabilitado) × comprasPorMes`, con las mismas definiciones de §4.1.1 |
-| Suscripciones | **Sin importe** hasta que se resuelva §13.4. Sin señal de uso no hay ahorro que calcular |
+| Suscripciones a revisar | Según el disparador: si **subió más que el IPC**, el exceso — `max(0, importeActual − importeAnterior × (1 + ipcAcumulado))`; si es la de **seis meses sin revisar**, el importe mensual completo, que es lo que se ahorra si se da de baja |
 
 Dos reglas que valen para los tres:
 
@@ -329,35 +343,55 @@ separado —nunca promediadas, regla 7 de `CLAUDE.md`—, serie de ocho semanas,
 del INDEC histórico y último dato, con el mes en curso marcado como estimado cuando
 todavía no salió el oficial (§5.7).
 
-### 4.8 En el teléfono (`12-en-el-telefono.png`)
+### 4.8 En el teléfono: el diseño responsive
 
-Vista propia (`mobile`), y va en la navegación entre Divisas e inflación y
-Conexiones. No es "la app en chico": es la lista corta de lo que se hace **de pie**.
-El copy del prototipo lo dice y es la regla de diseño de toda la sección:
+**No es una vista y no va en la navegación** (§4). `12-en-el-telefono.png` es la
+página con la que el prototipo presenta el diseño del teléfono, y lo que se construye
+es el comportamiento responsive de cuatro pantallas que ya existen. Esta sección
+especifica ese comportamiento.
+
+No es "la app en chico": abajo de la primera ruptura, el producto se reduce a lo que
+se hace **de pie**. El copy del prototipo lo dice y es la regla de diseño de toda la
+sección:
 
 > El teléfono no repite el escritorio: solo lleva lo que se hace de pie, en el
 > comercio o en la calle. Sacar la foto del ticket, ver cuánto queda del mes, la
 > lista de compras con precios de hoy y los avisos de baja.
 
-Cuatro pantallas, y **son cuatro a propósito**: lo que no está acá se hace sentado.
-Nada de análisis, nada de configuración, nada de edición de reglas.
+**Cuatro pantallas llegan al teléfono, y son cuatro a propósito**: lo que no está acá
+se hace sentado. Nada de análisis, nada de configuración, nada de edición de reglas.
+Las otras cinco vistas **no se rediseñan para el teléfono en v1**: se acceden, se leen
+con scroll horizontal donde haga falta (§11) y no se les promete una experiencia
+móvil.
 
-| Pantalla | Qué lleva |
-|---|---|
-| **Registrar** | "Sacale una foto al ticket" · "Brote lee las líneas y reconoce los productos que seguís." Zona de subida con borde punteado y el botón redondo de cámara, más "Elegir de la galería" y "Cargar solo el total". Debajo, "Último cargado" con comercio, importe y antigüedad |
-| **Agosto** | "Gastado este mes" con el total del mes, "Queda …" con el porcentaje, y los sobres con su barra y su estado. Solo lectura |
-| **Lista** | "Total estimado" y la misma lista agrupada por comercio de §4.6, con casillas. Es la pantalla que se usa adentro del supermercado |
-| **Avisos** | Las tarjetas de §4.6, y "Ver todos los precios" al pie |
+| Pantalla del teléfono | Es la versión angosta de | Qué lleva |
+|---|---|---|
+| **Registrar** | El diálogo de registrar compra de §4.3 | "Sacale una foto al ticket" · "Brote lee las líneas y reconoce los productos que seguís." Zona de subida con borde punteado y el botón redondo de cámara, más "Elegir de la galería" y "Cargar solo el total". Debajo, "Último cargado" con comercio, importe y antigüedad |
+| **Agosto** | Resumen (§4.1) y los sobres de §4.5 | "Gastado este mes" con el total del mes, "Queda …" con el porcentaje, y los sobres con su barra y su estado. Solo lectura: en el teléfono no se editan topes |
+| **Lista** | La pestaña Lista de compras de §4.6 | "Total estimado" y la misma lista agrupada por comercio, con casillas. Es la pantalla que se usa adentro del supermercado |
+| **Avisos** | La pestaña Avisos de §4.6 | Las tarjetas de §4.6, y "Ver todos los precios" al pie |
+
+Cada una es la **misma pantalla** en angosto, no una pantalla nueva: mismo endpoint,
+mismos números, misma procedencia. Si el teléfono y el escritorio muestran totales
+distintos para el mismo mes, es el bug de la regla 2 otra vez.
 
 Dos cosas que salen de acá y valen para todo el producto:
 
-- La pantalla pide permiso de cámara con la copy del prototipo: "El teléfono pide
-  permiso. La foto se descarta a los 30 días." **La foto no se descarta sola**: el
-  requisito del producto es el borrado que hace el usuario, real y con el objeto de
-  R2 incluido (§10, y la sección Privacidad de `CLAUDE.md`). Esa frase del prototipo
-  promete algo que el producto no hace, y aparece en tres lugares: acá, en el diálogo
-  de registrar compra y en Conexiones. Es una decisión pendiente, en §13.4, y no se
-  resuelve inventando un barrido.
+- **La foto no se descarta sola.** El borrado es del usuario, real y con el objeto de
+  R2 incluido (§10, y la sección Privacidad de `CLAUDE.md`). El prototipo promete un
+  descarte a los 30 días que el producto no hace, y lo promete en tres lugares:
+  **se cambian las tres frases**, decidido. La copy que va a producción:
+
+  | Dónde | Copy del prototipo | Copy que va |
+  |---|---|---|
+  | Permiso de cámara, §4.8 | "El teléfono pide permiso. La foto se descarta a los 30 días." | "El teléfono pide permiso. La foto queda guardada hasta que la borres." |
+  | Diálogo de registrar compra, §4.3 | "Cámara o galería. La foto se sube por HTTPS, se lee y se descarta a los 30 días." | "Cámara o galería. La foto se sube por HTTPS, se lee y queda hasta que la borres." |
+  | Conexiones, §4.9 | "Las fotos de tickets se procesan al subirlas y se descartan a los 30 días; los datos quedan." | "Las fotos de tickets se procesan al subirlas y quedan hasta que las borres; los datos quedan." |
+
+  Es la **única** excepción a la regla de copy literal de `CLAUDE.md`, y está acá
+  porque la frase original promete algo que el producto no hace. La entrada de Ayuda
+  "¿Qué pasa con las fotos de tickets?" ya dice lo correcto ("Podés borrarla, y el
+  borrado elimina también la imagen guardada") y **no se toca**.
 - El total del mes y los sobres del teléfono salen de las mismas respuestas que el
   escritorio (§5.0, §5.1). El teléfono **no** tiene su propio cálculo: sería la
   cuarta pantalla del test de número único de §13.7.
@@ -768,25 +802,27 @@ método. Antes de encender cualquier consulta automática hay que revisar los t�
 de uso del sitio; que el endpoint sea público y que `robots.txt` no lo prohíba es
 necesario y no es suficiente.
 
-**El estado inicial de las conexiones es una decisión abierta, no un hecho de este
-documento** (§13.4). Lo que hay hoy en el diseño: `connections` no tiene filas para
-un hogar nuevo, y el prototipo trata la fila ausente como **habilitada**
-(`conns[r] !== false`), con siete de los diez comercios encendidos. O sea que, tal
-como está diseñado, un hogar recién creado consulta todos los comercios de fábrica
-desde el primer cron. Las dos salidas:
+**Estado inicial de las conexiones de un hogar nuevo: decidido, y es por vía de
+acceso.** Encendidas las que consultan un endpoint público y documentado de la propia
+tienda; apagadas las que necesitan leer HTML que el comercio no publicó para eso.
 
-- **Como está el diseño**: fila ausente = habilitada. Coherente con el prototipo y
-  con una pantalla que no arranca vacía, y hay que aceptar que la primera corrida
-  sale a los diez sitios sin que nadie haya mirado sus términos.
-- **Conservadora**: fila ausente = apagada, y encender es un acto explícito. Nada
-  sale a la red hasta que alguien lo decide, al precio de que Precios arranque sin
-  un solo precio y el hogar tenga que encender antes de ver nada.
+| Vía | Comercios | Estado inicial |
+|---|---|---|
+| `api` | Mercado Libre, Día, Jumbo, Disco, Vea, Farmacity | **Encendida** |
+| `scrape` | Coto, Carrefour | **Apagada** |
+| `llm` | Diarco | **Apagada** |
+| `manual` | Almacén del barrio | No consulta: la carga el usuario |
 
-Recomiendo la conservadora para los `scrape` y `llm`, y la del diseño para
-Mercado Libre y los VTEX, que son endpoints públicos y documentados de la propia
-tienda. Pero es una decisión de producto y no la toma este documento.
+Así Precios arranca con precios de seis comercios el primer día, y nada que dependa
+de leer HTML ajeno sale a la red hasta que alguien lo enciende a sabiendas.
 
-Lo que **sí** queda decidido, en cualquiera de los dos casos:
+**No se implementa como "fila ausente = habilitada".** Al crear el hogar se insertan
+las diez filas de `connections` con su `enabled` explícito. La ausencia de fila no
+significa nada —es un hogar a medio crear— y así el estado de cada fuente se puede
+leer, auditar y cambiar sin depender de un default implícito. El prototipo usa
+`conns[r] !== false` porque es un prototipo con estado en memoria; el producto no.
+
+Lo que queda decidido además, y no depende de lo anterior:
 
 1. La revisión de términos y cada encendido o apagado se anotan en `audit_log` con la
    acción `connection_toggle`: queda quién lo hizo y cuándo.
@@ -1042,8 +1078,7 @@ estado vacío diseñado, no un cero:
 | Divisas e inflación | **Funciona desde el día uno**: no depende de datos del usuario | — |
 | Precios · Lista de compras | Sin productos seguidos no hay lista. No mostrar tarjetas de comercio vacías ni un "Total estimado $ 0" | "Agregar producto" |
 | Precios · Avisos | Sin avisos todavía: decir que se generan cuando un precio baja de lo que pidió, no "No hay información disponible" | "Configurar los avisos" |
-| En el teléfono | Registrar funciona desde el día uno; Agosto, Lista y Avisos heredan el estado vacío de su pantalla de escritorio | "Sacale una foto al ticket" |
-| Conexiones | Los diez comercios de fábrica, en el estado inicial que se decida en §6.2 | "Activar los que uses" y "Agregar una fuente" |
+| Conexiones | Las diez fuentes ya sembradas: las seis de `api` encendidas, Coto, Carrefour y Diarco apagadas (§6.2) | "Activar los que uses" y "Agregar una fuente" |
 | Ayuda | Funciona desde el día uno | — |
 
 Falta un estado que no es de datos vacíos sino de pertenencia, y sale de §7.1.1: el
@@ -1051,6 +1086,10 @@ Falta un estado que no es de datos vacíos sino de pertenencia, y sale de §7.1.
 de arriba. Ve una sola, que dice quién administra el hogar y que le tiene que mandar
 la invitación. No se le crea un hogar propio para tener algo que mostrarle: eso
 parece funcionar y en realidad lo deja mirando datos que no son de nadie.
+
+El teléfono no tiene fila propia: las cuatro pantallas angostas de §4.8 son las mismas
+que las de arriba y heredan su estado vacío, con el mismo texto y el mismo botón. Un
+estado vacío que dice una cosa en el escritorio y otra en el teléfono es un bug.
 
 Reglas para escribirlos: nunca un gráfico vacío con ejes y sin datos, nunca un
 `$ 0` presentado como si fuera un dato, nunca "No hay información disponible". El
@@ -1132,31 +1171,25 @@ El mecanismo:
 
 ### 13.4 Decisiones abiertas
 
-Cuatro. Las dos originales que se cerraron fueron la vía de cada comercio de fábrica
-(§6.2) y las pantallas que faltaban (§4.6, §4.8). Las cuatro que quedan aparecieron
-revisando lo escrito, y **ninguna es técnica**: las cuatro son decisiones de producto
-que este documento no puede tomar solo.
+**Una.** Las otras se resolvieron y quedaron escritas donde corresponde:
 
-1. **El insight de suscripciones** (§4.2). Brote ve el cargo, no el uso. O el usuario
-   marca a mano una suscripción como sin usar, o el insight se reformula sobre lo
-   observable —el cargo subió más que el IPC, o viene cobrándose seis meses sin que
-   nadie lo toque— y se cambia la copy del prototipo. Hasta que se decida, no se
-   implementa la afirmación de uso.
-2. **La copy que promete que la foto se descarta a los 30 días.** Está en tres
-   lugares del prototipo —la pantalla de cámara del teléfono, el diálogo de registrar
-   compra y Conexiones— y el producto no lo hace: el borrado es del usuario (§10). Las
-   dos salidas son válidas y ninguna es de ingeniería: implementar el descarte
-   automático, o cambiar las tres frases. Lo que no se puede es dejarlo así, porque
-   es una promesa de privacidad que no se cumple. Mientras no se decida, el
-   documento dice lo que el producto hace, no lo que la pantalla promete.
+| Decisión | Resuelta en |
+|---|---|
+| Vía de acceso de cada comercio de fábrica | §6.2 |
+| Pantallas del prototipo sin especificar | §4.6, §4.8 |
+| Estado inicial de las conexiones: por vía de acceso | §6.2 |
+| La copy que prometía descartar la foto a los 30 días: se cambia la copy | §4.8 |
+| El insight de suscripciones: reformulado sobre lo observable | §4.2, §4.2.1 |
+| `mobile`: no es una vista, es el diseño responsive | §4, §4.8 |
 
-3. **El estado inicial de las conexiones de fábrica** (§6.2): fila ausente
-   habilitada, como está el diseño, o apagada hasta que alguien la encienda. Cambia
-   si un hogar nuevo sale a la red en su primera corrida.
-4. **La importación por CSV** (§4.9): está en el diseño como uno de los tres
-   interruptores de "qué entra" y no está especificada. Qué formatos acepta, cómo
-   mapea a categorías y qué hace con los duplicados. Mismo criterio que las
-   pantallas de §4.6: primero se escribe acá.
+Queda abierta:
+
+1. **La importación por CSV** (§4.9). Está en el diseño como uno de los tres
+   interruptores de "qué entra" y no está especificada: qué formatos acepta, cómo
+   mapea a categorías, qué hace con los duplicados. Mismo criterio que las pantallas
+   de §4.6 —primero se escribe acá, no se implementa a partir de la captura— y no
+   bloquea nada antes del paso 9 de §14, porque los movimientos se cargan a mano y
+   por ticket desde el paso 2.
 
 Lo que **no** es una decisión abierta, aunque lo parezca: revisar los términos de uso
 de cada comercio antes de encenderlo (§6.2). Eso es un paso del procedimiento, con su
@@ -1233,7 +1266,11 @@ tocan producción.
    Libre por su API, y al final los de adaptador propio y la vía del modelo de §6.1.
    Lista de compras y Avisos (§4.6) salen del mismo cálculo de §5.6: no se les
    escribe una fórmula aparte.
-6. Divisas e inflación por Cron (§4.7), con `job_runs` y la alerta `job_stale` de
+6. **Responsive de las cuatro pantallas de §4.8**, en la misma etapa en que se
+   construye cada una y no como un paso al final: son las mismas pantallas en angosto,
+   así que dejarlo para después significa rehacerlas. No hay una vista "En el
+   teléfono" que construir.
+7. Divisas e inflación por Cron (§4.7), con `job_runs` y la alerta `job_stale` de
    §13.2 en la misma etapa: un cron sin vigilancia no se nota cuando se cae.
-7. Fotos de tickets y OCR.
-8. Exportaciones, alertas, privacidad.
+8. Fotos de tickets y OCR.
+9. Exportaciones, alertas, privacidad.

@@ -147,7 +147,7 @@ cuando el hogar apaga una fuente en `/api/connections`.
   "insights": [
     { "kind": "Promedio", "title": "…", "body": "…", "savingCents": 5600000,
       "action": { "label": "…", "target": "transactions" } },
-    { "kind": "Suscripciones", "title": "…", "body": "…", "savingCents": null,
+    { "kind": "Suscripciones", "title": "…", "body": "…", "savingCents": 1290000,
       "action": { "label": "…", "target": "analysis" } }
   ],
   "unitPriceMoves": [
@@ -155,9 +155,9 @@ cuando el hogar apaga una fuente en `/api/connections`.
   ]
 }
 ```
-`savingCents` se **calcula** según `SDD.md` §4.2.1 y es `null` cuando el tipo de
-insight no tiene un ahorro derivable — hoy, Suscripciones. `null` significa que la
-UI no muestra importe: nunca un `0` ni un estimado. Y no se suma con
+`savingCents` se **calcula** según `SDD.md` §4.2.1 y es `null` cuando ese insight en
+particular no tiene un ahorro derivable. `null` significa que la UI no muestra
+importe: nunca un `0` ni un estimado. Y no se suma con
 `kpis.detectedSavingsCents` de `/api/overview`: miran la misma oportunidad y
 sumarlos cuenta la misma plata dos veces.
 
@@ -328,9 +328,9 @@ otro hogar responde `404 not_found`, no `403`: no se confirma que el id exista
 ### `PATCH /api/watch/items/:id` · `DELETE /api/watch/items/:id`
 ### `GET /api/retailers`
 Los de fábrica (`householdId: null`) más los del hogar. `kind` sale de la plataforma
-verificada de cada tienda (`SDD.md` §6.2). `enabled` refleja `connections`, y qué
-significa la ausencia de fila para un hogar nuevo es una decisión abierta (`SDD.md`
-§13.4); encender o apagar siempre queda en `audit_log`.
+verificada de cada tienda (`SDD.md` §6.2). `enabled` refleja `connections`, que se
+siembra al crear el hogar con las diez filas explícitas: `api` encendida, `scrape` y
+`llm` apagadas. Encender o apagar siempre queda en `audit_log`.
 ```json
 [{ "id": "coto", "name": "Coto", "kind": "scrape", "enabled": false },
  { "id": "disco", "name": "Disco", "kind": "api", "enabled": true },
@@ -474,7 +474,7 @@ usuario. **El movimiento nunca se crea sin este paso.**
 ### `GET /api/alerts?unread=true`
 ### `POST /api/alerts/:id/read`
 
-Tipos: `due_soon`, `price_drop`, `price_rise`, `budget_over`, `subscription_idle`,
+Tipos: `due_soon`, `price_drop`, `price_rise`, `budget_over`, `subscription_review`,
 `fx_move`, `job_stale`.
 
 **Una forma fija de `payload` por tipo.** La tarjeta se dibuja solo con lo que trae el
@@ -490,7 +490,7 @@ que sale cada alerta, no un vocabulario nuevo:
 | `budget_over` | `{ categoryId, name, budgetCents, spentCents, consumedPct }` | `GET /api/budget` · `envelopes` |
 | `fx_move` | `{ currency, source, fromCents, toCents, observedOn }` | `GET /api/fx` |
 | `job_stale` | `{ job, lastOkAt, expectedWithinHours }` | `SDD.md` §13.2 |
-| `subscription_idle` | — | **Pendiente** (`SDD.md` §13.4): sin señal de uso no hay payload que definir |
+| `subscription_review` | `{ ruleId, merchant, amountCents, trigger, prevAmountCents, ipcPeriodPct, monthsUnreviewed }` | §4.2 · `trigger` es `"rose_above_ipc"` o `"unreviewed_6m"` |
 
 `targetCents` en `price_drop` es lo que hace legible la tarjeta del prototipo ("Por
 debajo de los $ 34.000 que pediste que te avisemos"): sin él la alerta no puede decir
@@ -500,5 +500,7 @@ contra qué se compara, y eso es la regla 5.
 tuvo corrida exitosa en el doble de su intervalo (`SDD.md` §13.2). Aparece igual, y
 la UI la distingue de las otras.
 
-`subscription_idle` está **pendiente de decisión** (`SDD.md` §13.4): Brote ve el
-cargo, no el uso. Hasta que se resuelva no se emite con una afirmación de uso.
+`subscription_review` reemplaza a `subscription_idle`: Brote ve el cargo, nunca el
+uso, así que la alerta habla de lo observable —el cargo subió más que la inflación del
+período, o viene cobrándose seis meses sin que nadie la revise (`SDD.md` §4.2)—. No
+afirma que la suscripción no se use.

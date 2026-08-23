@@ -197,6 +197,11 @@ CREATE TABLE item_urls (
 
 -- Qué fuentes habilitó el hogar. Apagar una acá tiene que cambiar los cálculos
 -- de canasta, plan de compra dividida y KPI de ahorro. Ver CLAUDE.md regla 6.
+--
+-- Al crear un hogar se insertan las DIEZ filas con su enabled explícito, por vía de
+-- acceso: encendidas las de kind='api' (Mercado Libre y los cinco VTEX), apagadas las
+-- de 'scrape' y 'llm'. La ausencia de fila no significa "habilitada": significa hogar
+-- a medio crear. Ver SDD §6.2.
 CREATE TABLE connections (
   household_id  TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
   retailer_id   TEXT NOT NULL REFERENCES retailers(id) ON DELETE CASCADE,
@@ -335,11 +340,15 @@ CREATE TABLE alerts (
   -- job_stale no es sobre la plata del hogar sino sobre Brote: un cron que dejó
   -- de correr. Aparece igual. Ver SDD §13.2.
   kind         TEXT NOT NULL CHECK (kind IN
-                 ('due_soon','price_drop','price_rise','budget_over','subscription_idle',
+                 ('due_soon','price_drop','price_rise','budget_over','subscription_review',
                   'fx_move','job_stale')),
   -- price_rise faltaba y el prototipo lo muestra: la tercera tarjeta de Avisos es una
   -- suba ("El aceite de girasol subió en cuatro de seis comercios", marca ↑). Ver
   -- SDD §4.6.
+  --
+  -- subscription_review, no subscription_idle: Brote ve el cargo, nunca el uso, así
+  -- que "idle" nombraba lo único que no se puede observar. Los dos disparadores
+  -- derivables están en SDD §4.2.
   --
   -- JSON, una forma fija por kind, documentada en api-contract.md. La tarjeta se
   -- dibuja SOLO con lo que trae el payload: si un campo no está, no se infiere.
@@ -396,9 +405,9 @@ CREATE INDEX idx_jobruns_job ON job_runs(job, started_at DESC);
 -- tabla con la evidencia y el porqué está en SDD §6.2. Día, Jumbo, Disco, Vea y
 -- Farmacity corren VTEX y los cubre UN adaptador parametrizado por dominio.
 --
--- Ojo: cargarlos acá no dice nada sobre si están encendidos. connections arranca sin
--- filas, y qué significa una fila ausente —habilitada, como en el prototipo, o
--- apagada— es una decisión abierta: SDD §6.2 y §13.4.
+-- Ojo: cargarlos acá no dice nada sobre si están encendidos. Eso lo dice connections,
+-- que se siembra con las diez filas al crear cada hogar: 'api' encendida, 'scrape' y
+-- 'llm' apagadas. Ver SDD §6.2.
 INSERT INTO retailers (id, name, kind, is_wholesale) VALUES
   ('mercadolibre','Mercado Libre','api',0),   -- API oficial documentada
   ('dia','Día','api',0),                      -- VTEX

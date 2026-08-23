@@ -67,7 +67,7 @@ prototipo. Los diálogos están recortados a su propio marco, a 2x.
 | `09-precios-lista-compras.png` | Lista de compras por comercio |
 | `10-precios-avisos.png` | Avisos de baja de precio y de vencimientos |
 | `11-divisas-inflacion.png` | USD/EUR/CHF (BNA y xe.com) e inflación |
-| `12-en-el-telefono.png` | Las cuatro acciones móviles |
+| `12-en-el-telefono.png` | Presentación del diseño responsive: las cuatro pantallas que llegan al teléfono. No es una vista de la app (`SDD.md` §4.8) |
 | `13-conexiones.png` | Fuentes de datos, comercios propios, privacidad, alertas |
 | `14-ayuda.png` | Centro de ayuda — 29 temas en 7 secciones |
 | `15-onboarding.png` | Guía de configuración, tres pasos |
