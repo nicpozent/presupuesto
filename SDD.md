@@ -303,9 +303,14 @@ calendario.
     "$ 36.800 → $ 33.500. Por debajo de los $ 34.000 que pediste que te avisemos."
     Un aviso de baja sin el precio anterior y el comercio no es un aviso, es un
     rumor (regla 5).
-  - Los tipos que se muestran acá son `price_drop` y los de suba de canasta; los
-    `due_soon`, `budget_over` y `fx_move` viven en sus pantallas. `job_stale` (§13.2)
-    también aparece acá, distinguible: no habla de la plata del hogar.
+  - Los tipos que se muestran acá son **`price_drop`** (baja, marca `↓`) y
+    **`price_rise`** (suba de canasta, marca `↑`, la tercera tarjeta del prototipo:
+    "El aceite de girasol subió en cuatro de seis comercios"). Los `due_soon`,
+    `budget_over` y `fx_move` viven en sus pantallas. `job_stale` (§13.2) también
+    aparece acá, distinguible: no habla de la plata del hogar.
+  - Cada tipo tiene una forma fija de `payload`, en `api-contract.md`, y la tarjeta se
+    dibuja **solo** con eso: nada se infiere en el cliente. Una alerta de un tipo que
+    la UI no conoce no se dibuja a medias, no se dibuja.
   - Pie: "Los avisos siguen la configuración de Conexiones: hora, baja mínima y
     canal." Los tres los edita el usuario en §4.9, y son de verdad tres: si cambiar
     la baja mínima no cambia qué avisos entran, está mal.
@@ -355,7 +360,7 @@ Dos cosas que salen de acá y valen para todo el producto:
   resuelve inventando un barrido.
 - El total del mes y los sobres del teléfono salen de las mismas respuestas que el
   escritorio (§5.0, §5.1). El teléfono **no** tiene su propio cálculo: sería la
-  cuarta pantalla del test de número único de §13.6.
+  cuarta pantalla del test de número único de §13.7.
 
 ### 4.9 Conexiones (`13-conexiones.png`)
 
@@ -1157,7 +1162,30 @@ Lo que **no** es una decisión abierta, aunque lo parezca: revisar los términos
 de cada comercio antes de encenderlo (§6.2). Eso es un paso del procedimiento, con su
 registro en `audit_log`; no bloquea escribir el código.
 
-### 13.5 Objetivos y límites
+### 13.5 Valores por defecto a confirmar
+
+Varios números de este documento **no salen del prototipo ni de una restricción de la
+plataforma**: los elegí yo al escribirlo porque el hueco necesitaba un valor. Son
+razonables y son discutibles, y conviene que se lean como defaults y no como
+decisiones tomadas:
+
+| Valor | Dónde | De dónde salió |
+|---|---|---|
+| Invitación vence a los 14 días | §7.1.1 | Elegido |
+| TTL de KV 26 h / 40 d / 7 h | §6 | La **regla** —TTL mayor que el intervalo— es firme; los números son elegidos |
+| `job_stale` al doble del intervalo | §13.2 | Elegido |
+| `stale` al doble de la cadencia | §6 | Elegido, por coherencia con el de arriba |
+| `item_prices` se agrega a semanal a los 18 meses | §13.5 | Elegido |
+| Promedio de la categoría sobre 6 meses | §4.2.1 | Elegido; el prototipo dice "tu propio promedio" y no da ventana |
+| `comprasPorMes = 30 / cadence_days` | §4.1.1 | Elegido |
+| p75 de lectura < 300 ms | §13.5 | Elegido |
+
+Lo que **no** es elegido y no se toca sin cambiar el producto: `IPC_PROY = 2,0%`
+(está en `wrangler.example.toml`), los 300 s de la URL pre-firmada (está en
+`api-contract.md`), la hora `08:00` de los avisos y los lotes de 40 (están en el
+prototipo y en `DEPLOY.md`).
+
+### 13.6 Objetivos y límites
 
 - **Latencia**: p75 de los endpoints de lectura por debajo de 300 ms de tiempo de
   servidor. Todos leen de D1 o KV; ninguno sale a la red (§6).
@@ -1173,7 +1201,7 @@ registro en `audit_log`; no bloquea escribir el código.
   `household_id` cuando corresponde, nunca con importes ni nombres de comercio del
   hogar.
 
-### 13.6 Estrategia de test
+### 13.7 Estrategia de test
 
 `CLAUDE.md` pide un test por regla del dominio. Dos cosas más, que son las que
 atrapan los bugs que este documento ya vio una vez:
@@ -1197,7 +1225,7 @@ tocan producción.
    §13.3 con su test. El aislamiento va en el paso 1: agregarlo después es reescribir
    todas las queries.
 2. Categorías, movimientos manuales, reglas recurrentes, `month_totals` con su
-   recálculo. Tests de §5.0, §5.1 y §5.2, más el test de número único de §13.6.
+   recálculo. Tests de §5.0, §5.1 y §5.2, más el test de número único de §13.7.
 3. Resumen y Análisis de gastos con datos reales.
 4. Presupuesto, objetivos, ingresos y compromisos.
 5. Precios: **el adaptador VTEX primero**, que con un solo adaptador parametrizado

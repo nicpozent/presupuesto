@@ -474,8 +474,27 @@ usuario. **El movimiento nunca se crea sin este paso.**
 ### `GET /api/alerts?unread=true`
 ### `POST /api/alerts/:id/read`
 
-Tipos: `due_soon`, `price_drop`, `budget_over`, `subscription_idle`, `fx_move`,
-`job_stale`.
+Tipos: `due_soon`, `price_drop`, `price_rise`, `budget_over`, `subscription_idle`,
+`fx_move`, `job_stale`.
+
+**Una forma fija de `payload` por tipo.** La tarjeta se dibuja solo con lo que trae el
+payload: ningún campo se infiere en el cliente, y un tipo que la UI no conoce no se
+dibuja —no se dibuja a medias—. Los campos son los que ya define la pantalla de la
+que sale cada alerta, no un vocabulario nuevo:
+
+| `kind` | `payload` | Sale de |
+|---|---|---|
+| `price_drop` | `{ itemId, name, retailerId, retailer, fromCents, toCents, targetCents, url }` | §4.6 Avisos |
+| `price_rise` | `{ itemId, name, retailersUp, retailersTotal, avgDeltaPct, ipcMonthlyPct }` | §4.6 Avisos |
+| `due_soon` | `{ name, amountCents, dayOfMonth, daysAway, note, fromRule }` | `GET /api/income` · `dueSoon` |
+| `budget_over` | `{ categoryId, name, budgetCents, spentCents, consumedPct }` | `GET /api/budget` · `envelopes` |
+| `fx_move` | `{ currency, source, fromCents, toCents, observedOn }` | `GET /api/fx` |
+| `job_stale` | `{ job, lastOkAt, expectedWithinHours }` | `SDD.md` §13.2 |
+| `subscription_idle` | — | **Pendiente** (`SDD.md` §13.4): sin señal de uso no hay payload que definir |
+
+`targetCents` en `price_drop` es lo que hace legible la tarjeta del prototipo ("Por
+debajo de los $ 34.000 que pediste que te avisemos"): sin él la alerta no puede decir
+contra qué se compara, y eso es la regla 5.
 
 `job_stale` no habla de la plata del hogar sino de Brote: un trabajo de fondo que no
 tuvo corrida exitosa en el doble de su intervalo (`SDD.md` §13.2). Aparece igual, y

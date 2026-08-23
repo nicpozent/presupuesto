@@ -335,8 +335,15 @@ CREATE TABLE alerts (
   -- job_stale no es sobre la plata del hogar sino sobre Brote: un cron que dejó
   -- de correr. Aparece igual. Ver SDD §13.2.
   kind         TEXT NOT NULL CHECK (kind IN
-                 ('due_soon','price_drop','budget_over','subscription_idle','fx_move',
-                  'job_stale')),
+                 ('due_soon','price_drop','price_rise','budget_over','subscription_idle',
+                  'fx_move','job_stale')),
+  -- price_rise faltaba y el prototipo lo muestra: la tercera tarjeta de Avisos es una
+  -- suba ("El aceite de girasol subió en cuatro de seis comercios", marca ↑). Ver
+  -- SDD §4.6.
+  --
+  -- JSON, una forma fija por kind, documentada en api-contract.md. La tarjeta se
+  -- dibuja SOLO con lo que trae el payload: si un campo no está, no se infiere.
+  -- Un kind que la UI no conoce no se dibuja, no se dibuja a medias.
   payload      TEXT NOT NULL,                -- JSON
   read_at      TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
