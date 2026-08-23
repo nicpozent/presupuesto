@@ -167,8 +167,10 @@ comercio más barato de un producto baja el número: si no lo baja, está mal.
 
 - **Tabla de categorías**: mes, mes anterior, variación nominal, variación real,
   presupuesto. La variación real es la columna que decide el color.
-- **Insights** en tarjetas, cada uno con acción. Tres tipos, y cada uno necesita una
-  señal que Brote realmente tenga:
+- **Insights** en tarjetas, cada uno con acción **y con un importe de ahorro**. Ese
+  importe es plata en pantalla, así que se calcula (regla 6) y se define en §4.2.1:
+  no alcanza con especificar el texto de la tarjeta. Tres tipos, y cada uno necesita
+  una señal que Brote realmente tenga:
   - *Desvío contra el propio promedio*: el gasto de la categoría contra su promedio
     de los últimos seis meses en pesos constantes (§5.3). Derivable hoy.
   - *Cambio de comercio sugerido*: mismo producto, comercio más barato entre las
@@ -182,6 +184,27 @@ comercio más barato de un producto baja el número: si no lo baja, está mal.
     sobre lo observable y la copy de "sin uso" no se usa. Ver §13.4.
 - **Aumento por unidad**: producto, precio anterior, precio actual, variación.
   Grilla `minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)`.
+
+#### 4.2.1 El ahorro de cada insight
+
+Cada tarjeta de insight muestra un importe. Es el mismo problema que el KPI de §4.1.1
+y se resuelve igual: **se deriva o no se muestra.**
+
+| Insight | Ahorro |
+|---|---|
+| Desvío contra el promedio | `max(0, gastoDelMes − promedioDeLaCategoría)`, en pesos constantes (§5.3). Es lo que costó el desvío, no una promesa |
+| Cambio de comercio | `(precioEnElComercioHabitual − mejorPrecioHabilitado) × comprasPorMes`, con las mismas definiciones de §4.1.1 |
+| Suscripciones | **Sin importe** hasta que se resuelva §13.4. Sin señal de uso no hay ahorro que calcular |
+
+Dos reglas que valen para los tres:
+
+- **Un insight sin ahorro derivable no muestra número.** Ni `$ 0`, ni "hasta",
+  ni un estimado. La tarjeta existe igual: el texto es el valor, el importe es el
+  argumento.
+- **Los ahorros de los insights y el KPI de §4.1.1 no se suman.** Miran la misma
+  oportunidad desde dos lados —el KPI agrega todos los productos, el insight de
+  cambio de comercio señala uno— y presentarlos como sumables cuenta la misma plata
+  dos veces. Ninguna pantalla muestra un total que los mezcle.
 
 ### 4.3 Movimientos (`03-movimientos-mes.png`, `04-movimientos-anual.png`)
 
@@ -213,6 +236,14 @@ de plazo fijo y FCI.
 
 Sobres por categoría con barra de consumo y presupuesto editable; agregar categoría;
 objetivos de ahorro con meta, acumulado y fecha.
+
+**Cuotas: una sola verdad.** `started_on` y `count_total` son el calendario, y de
+ahí sale todo: qué meses tienen cuota (término D de §5.0) y cuántas van pagadas
+—las que ya vencieron—. `count_paid` **no se guarda**: era una columna editable que
+respondía la misma pregunta que las fechas, y las dos podían no coincidir. La barra
+de progreso y el total del mes tienen que contar lo mismo o es la regla 2 otra vez,
+en chico. Si el hogar paga adelantado o se atrasa, lo que se corrige es el
+calendario.
 
 ### 4.6 Precios (`07-precios-productos.png`, `08-precios-canasta.png`, `09-precios-lista-compras.png`, `10-precios-avisos.png`)
 
@@ -313,18 +344,39 @@ agregar una fuente nueva por URL, ver estado y última consulta, configurar
 frecuencia y días de anticipación de las alertas, y ejercer privacidad (exportar
 todo, borrar todo).
 
-Los comercios de fábrica **arrancan apagados** y encenderlos es un acto explícito,
-que queda en `audit_log` (§6.2). Esta pantalla es también donde se editan las seis
-preferencias que gobiernan la pestaña de Avisos (§4.6) —hora, baja mínima, correo,
-notificación, resumen semanal y días de anticipación—, y donde se nombra a Cohere
+Esta pantalla es también donde se editan las seis preferencias que gobiernan la
+pestaña de Avisos (§4.6) —hora, baja mínima, correo, notificación, resumen semanal y
+días de anticipación—, la cadencia de consulta de §6.3, y donde se nombra a Cohere
 como el proveedor que lee los tickets y los precios (§10).
+
+**Qué entra**, que en el prototipo son tres interruptores (`sources`): tickets, CSV
+y carga del hogar. Los tickets son §10 y la carga del hogar es §4.3. **La importación
+por CSV está en el diseño y no está especificada acá** —qué formatos acepta, cómo
+mapea a categorías, qué hace con los duplicados—: ver §13.4. Lo que sí queda
+definido es que un movimiento importado, venga de un CSV propio o de un resumen que
+el usuario bajó del banco, lleva `source = 'import'`.
+
+**Brote no se conecta a ningún banco.** No hay integración bancaria, no se piden ni
+se guardan credenciales, y la Ayuda lo dice con esas palabras. Por eso `'bank'` salió
+del dominio de `transactions.source`: era un valor que insinuaba una integración que
+el producto niega en su propia pantalla de privacidad.
 
 ### 4.10 Ayuda (`14-ayuda.png`)
 
-Centro de ayuda dentro de la app, en el menú principal. Siete secciones con 26
-temas: nominal contra real, gastos recurrentes, de dónde sale cada total,
-histórico y proyección, seguimiento de precios, categorías y sobres y cuotas, y
-tus datos. Buscador sobre pregunta y respuesta, y filtro por sección.
+Centro de ayuda dentro de la app, en el menú principal. **Siete secciones con 30
+temas**, contados del prototipo:
+
+| Sección | `id` | Temas |
+|---|---|---|
+| Nominal y real | `inflacion` | 4 |
+| Gastos recurrentes | `recurrentes` | 5 |
+| De dónde sale cada total | `totales` | 3 |
+| Histórico y proyección | `historico` | 3 |
+| Seguimiento de precios | `precios` | 7 |
+| Categorías, sobres y cuotas | `categorias` | 4 |
+| Tus datos | `datos` | 4 |
+
+Buscador sobre pregunta y respuesta, y filtro por sección.
 
 Tres enlaces contextuales entran al tema exacto: el "?" junto al interruptor
 nominal/real del Resumen, "¿Por qué la diferencia?" en el pie de Movimientos, y
@@ -379,6 +431,7 @@ recomputeMonthTotal(hogar, y, m):
   C = Σ fixed_expenses vigentes en el mes                 alquiler, expensas, servicios
 
   D = Σ installments.monthly_cents con cuota vencida en el mes
+        (cuotas 1..count_total contadas desde started_on; ver §4.5)
 
   month_totals.nominal_cents = A + B + C + D
 ```
@@ -658,19 +711,75 @@ Dos detalles que salen de probar el endpoint y que hay que respetar:
 **Lo que sigue siendo del negocio y no de la ingeniería** es el permiso, no el
 método. Antes de encender cualquier consulta automática hay que revisar los términos
 de uso del sitio; que el endpoint sea público y que `robots.txt` no lo prohíba es
-necesario y no es suficiente. Por eso:
+necesario y no es suficiente.
 
-1. Un comercio de fábrica arranca **apagado** (`connections.enabled = 0`) hasta que
-   alguien lo habilita a sabiendas. La base no viene con consultas encendidas.
-2. La revisión de términos se anota en `audit_log` con la acción
-   `connection_toggle`: queda quién lo encendió y cuándo.
-3. Las consultas van al ritmo del cron —lotes de 40, cada 6 h, con timeout por
-   comercio— y no se acelera para "probar". Un comercio que responde `429` o `403`
-   se marca `status = 'degraded'` y se deja de consultar hasta que alguien lo mire.
+**El estado inicial de las conexiones es una decisión abierta, no un hecho de este
+documento** (§13.4). Lo que hay hoy en el diseño: `connections` no tiene filas para
+un hogar nuevo, y el prototipo trata la fila ausente como **habilitada**
+(`conns[r] !== false`), con siete de los diez comercios encendidos. O sea que, tal
+como está diseñado, un hogar recién creado consulta todos los comercios de fábrica
+desde el primer cron. Las dos salidas:
+
+- **Como está el diseño**: fila ausente = habilitada. Coherente con el prototipo y
+  con una pantalla que no arranca vacía, y hay que aceptar que la primera corrida
+  sale a los diez sitios sin que nadie haya mirado sus términos.
+- **Conservadora**: fila ausente = apagada, y encender es un acto explícito. Nada
+  sale a la red hasta que alguien lo decide, al precio de que Precios arranque sin
+  un solo precio y el hogar tenga que encender antes de ver nada.
+
+Recomiendo la conservadora para los `scrape` y `llm`, y la del diseño para
+Mercado Libre y los VTEX, que son endpoints públicos y documentados de la propia
+tienda. Pero es una decisión de producto y no la toma este documento.
+
+Lo que **sí** queda decidido, en cualquiera de los dos casos:
+
+1. La revisión de términos y cada encendido o apagado se anotan en `audit_log` con la
+   acción `connection_toggle`: queda quién lo hizo y cuándo.
+2. Las consultas van al ritmo del cron —lotes de 40, con la cadencia del hogar de
+   §6.3 y timeout por comercio— y no se acelera para "probar".
+3. Un comercio que responde `429` o `403` se marca `status = 'degraded'` y se deja de
+   consultar hasta que alguien lo mire. Eso no es negociable ni configurable.
 
 API siempre es preferible a scraping: más rápido, más barato, más estable y menos
 invasivo con el sitio. Un comercio que hoy está en `scrape` y mañana publica una
 API se pasa a `api`, que es exactamente para lo que existe la interfaz de §6.
+
+### 6.3 La frecuencia que elige el hogar contra el cron que es de todos
+
+El cron de precios corre cada 6 h para toda la instalación (§2), pero el hogar elige
+su propia cadencia en Conexiones, con dos opciones que la UI etiqueta **"Diaria"** y
+**"Semanal"** (`check_frequency` = `daily` | `weekly`). Cómo conviven no estaba
+escrito, y sin eso la preferencia es decorativa.
+
+La cadencia del hogar es un **filtro de elegibilidad**, no un cron propio. Cada
+corrida sigue armando el lote por `last_checked_at` ascendente (`DEPLOY.md` §5) y
+agrega la condición:
+
+```sql
+select * from watched_items w
+join households h on h.id = w.household_id
+join alert_prefs p on p.household_id = h.id
+where w.last_checked_at is null
+   or w.last_checked_at < datetime('now',
+        case p.check_frequency when 'weekly' then '-7 days' else '-1 day' end)
+order by w.last_checked_at asc nulls first
+limit 40
+```
+
+Consecuencias que hay que respetar:
+
+- Un hogar en `weekly` **no** se consulta cuatro veces por día: sus productos quedan
+  fuera del lote hasta que pasan siete días. Es el punto de la preferencia.
+- Un producto que el usuario refresca a mano pone `last_checked_at = null` y por eso
+  encabeza el lote siguiente, cualquiera sea la cadencia del hogar. El pedido
+  explícito le gana a la preferencia.
+- La antigüedad que muestra la UI se vuelve más grande en `weekly`, y eso está bien:
+  el precio va con su fecha (regla 5). Lo que no puede pasar es que la pantalla
+  presente un precio de seis días como si fuera de hoy.
+- Sin fila en `alert_prefs`, la cadencia es `daily` por el `DEFAULT` de la columna.
+
+Antes esta columna admitía `'6h'`, `'12h'` y `'24h'`: no podía representar "Semanal"
+y ofrecía dos valores que ninguna pantalla mostraba.
 
 ## 7. Autenticación con Google
 
@@ -876,7 +985,7 @@ estado vacío diseñado, no un cero:
 | Precios · Lista de compras | Sin productos seguidos no hay lista. No mostrar tarjetas de comercio vacías ni un "Total estimado $ 0" | "Agregar producto" |
 | Precios · Avisos | Sin avisos todavía: decir que se generan cuando un precio baja de lo que pidió, no "No hay información disponible" | "Configurar los avisos" |
 | En el teléfono | Registrar funciona desde el día uno; Agosto, Lista y Avisos heredan el estado vacío de su pantalla de escritorio | "Sacale una foto al ticket" |
-| Conexiones | Los diez comercios de fábrica, todos apagados salvo los que elija | "Activar los que uses" y "Agregar una fuente" |
+| Conexiones | Los diez comercios de fábrica, en el estado inicial que se decida en §6.2 | "Activar los que uses" y "Agregar una fuente" |
 | Ayuda | Funciona desde el día uno | — |
 
 Falta un estado que no es de datos vacíos sino de pertenencia, y sale de §7.1.1: el
@@ -954,9 +1063,10 @@ El mecanismo:
 
 ### 13.4 Decisiones abiertas
 
-Dos. De las tres que estaban acá se cerraron dos —la vía de cada comercio de
-fábrica quedó resuelta en §6.2 y las pantallas que faltaban están escritas (§4.6 y
-§4.8)—, y al escribirlas apareció una nueva, la de la foto.
+Cuatro. Las dos originales que se cerraron fueron la vía de cada comercio de fábrica
+(§6.2) y las pantallas que faltaban (§4.6, §4.8). Las cuatro que quedan aparecieron
+revisando lo escrito, y **ninguna es técnica**: las cuatro son decisiones de producto
+que este documento no puede tomar solo.
 
 1. **El insight de suscripciones** (§4.2). Brote ve el cargo, no el uso. O el usuario
    marca a mano una suscripción como sin usar, o el insight se reformula sobre lo
@@ -971,9 +1081,17 @@ fábrica quedó resuelta en §6.2 y las pantallas que faltaban están escritas (
    es una promesa de privacidad que no se cumple. Mientras no se decida, el
    documento dice lo que el producto hace, no lo que la pantalla promete.
 
+3. **El estado inicial de las conexiones de fábrica** (§6.2): fila ausente
+   habilitada, como está el diseño, o apagada hasta que alguien la encienda. Cambia
+   si un hogar nuevo sale a la red en su primera corrida.
+4. **La importación por CSV** (§4.9): está en el diseño como uno de los tres
+   interruptores de "qué entra" y no está especificada. Qué formatos acepta, cómo
+   mapea a categorías y qué hace con los duplicados. Mismo criterio que las
+   pantallas de §4.6: primero se escribe acá.
+
 Lo que **no** es una decisión abierta, aunque lo parezca: revisar los términos de uso
 de cada comercio antes de encenderlo (§6.2). Eso es un paso del procedimiento, con su
-default en apagado y su registro en `audit_log`; no bloquea escribir el código.
+registro en `audit_log`; no bloquea escribir el código.
 
 ### 13.5 Objetivos y límites
 

@@ -145,14 +145,21 @@ cuando el hogar apaga una fuente en `/api/connections`.
       "budgetCents": 72000000, "isVariable": true, "mtdCents": 44800000 }
   ],
   "insights": [
-    { "kind": "Promedio", "title": "…", "body": "…",
-      "action": { "label": "…", "target": "transactions" } }
+    { "kind": "Promedio", "title": "…", "body": "…", "savingCents": 5600000,
+      "action": { "label": "…", "target": "transactions" } },
+    { "kind": "Suscripciones", "title": "…", "body": "…", "savingCents": null,
+      "action": { "label": "…", "target": "analysis" } }
   ],
   "unitPriceMoves": [
     { "name": "Café molido 500 g", "thenCents": 1145000, "nowCents": 1290000, "deltaPct": 12.7 }
   ]
 }
 ```
+`savingCents` se **calcula** según `SDD.md` §4.2.1 y es `null` cuando el tipo de
+insight no tiene un ahorro derivable — hoy, Suscripciones. `null` significa que la
+UI no muestra importe: nunca un `0` ni un estimado. Y no se suma con
+`kpis.detectedSavingsCents` de `/api/overview`: miran la misma oportunidad y
+sumarlos cuenta la misma plata dos veces.
 
 ---
 
@@ -241,7 +248,8 @@ Mismos campos. `recurring: null` elimina la regla asociada.
   "dueSoon": [{ "name": "Alquiler", "amountCents": 62000000, "dayOfMonth": 5,
                 "daysAway": 2, "note": "ajusta por ICL en octubre", "fromRule": false }],
   "installments": [{ "name": "Notebook (Mercado Libre)", "totalCents": 124000000,
-                     "countTotal": 12, "countPaid": 5, "monthlyCents": 10333300 }],
+                     "countTotal": 12, "countPaid": 5, "monthlyCents": 10333300,
+                     "startedOn": "2026-03-01" }],
   "bonus": { "amountCents": 107500000, "month": "diciembre 2026",
              "base": "la mitad del mejor sueldo del semestre" },
   "idleCash": { "cents": 48000000, "tnaPlazoPct": 42, "tnaFciPct": 39 }
@@ -252,6 +260,12 @@ ordenados por proximidad. `fromRule` distingue el origen.
 
 ### `PATCH /api/income/:id` · `PATCH /api/fixed/:id` · `PATCH /api/installments/:id`
 ### `POST /api/fixed` · `DELETE /api/fixed/:id`
+
+`countPaid` es **derivado** y de solo lectura: son las cuotas ya vencidas contando
+desde `startedOn` (`SDD.md` §4.5). `PATCH /api/installments/:id` lo rechaza con
+`422 validation`; lo que se corrige es `startedOn` o `countTotal`. Tenerlo escribible
+daba dos respuestas para "cuántas van pagadas", y la barra de progreso y el total del
+mes podían no coincidir.
 
 `POST /api/fixed` y `POST /api/recurring` rechazan con `422 validation` un nombre de
 compromiso fijo que coincide con el `merchant` de una regla activa, y al revés: los
@@ -301,9 +315,10 @@ la antigüedad; nunca se omite el precio ni se reemplaza por una estimación.
 
 ### `PATCH /api/watch/items/:id` · `DELETE /api/watch/items/:id`
 ### `GET /api/retailers`
-Los de fábrica (`householdId: null`) más los del hogar. Los de fábrica **vienen
-apagados**: `kind` sale de la plataforma verificada de cada tienda (`SDD.md` §6.2) y
-encenderlos es un acto explícito del usuario, que queda en `audit_log`.
+Los de fábrica (`householdId: null`) más los del hogar. `kind` sale de la plataforma
+verificada de cada tienda (`SDD.md` §6.2). `enabled` refleja `connections`, y qué
+significa la ausencia de fila para un hogar nuevo es una decisión abierta (`SDD.md`
+§13.4); encender o apagar siempre queda en `audit_log`.
 ```json
 [{ "id": "coto", "name": "Coto", "kind": "scrape", "enabled": false },
  { "id": "disco", "name": "Disco", "kind": "api", "enabled": true },
@@ -393,7 +408,7 @@ nunca se presenta como medición (`SDD.md` §5.7).
 { "connections": [{ "retailerId": "diarco", "name": "Diarco", "kind": "llm",
                     "enabled": false, "status": "ok", "lastOkAt": null,
                     "lastError": null }],
-  "prefs": { "dueDaysAhead": 3, "priceDropPct": 5, "checkFrequency": "6h",
+  "prefs": { "dueDaysAhead": 3, "priceDropPct": 5, "checkFrequency": "daily",
              "sendHour": "08:00", "byMail": true, "byPush": true,
              "weeklyDigest": true } }
 ```
@@ -403,10 +418,14 @@ nunca se presenta como medición (`SDD.md` §5.7).
 `{ "dueDaysAhead": 5, "priceDropPct": 8, "sendHour": "08:00", "byMail": true,
    "byPush": true, "weeklyDigest": true }`
 
-Son las seis cosas que edita Conexiones y que gobiernan la pestaña de Avisos
-(`SDD.md` §4.6): hora, baja mínima y canal. `priceDropPct` filtra de verdad qué
-alertas se generan; si cambiarlo no cambia el contenido de `GET /api/alerts`, está
-mal.
+Son las cosas que edita Conexiones y que gobiernan la pestaña de Avisos (`SDD.md`
+§4.6): hora, baja mínima y canal. `priceDropPct` filtra de verdad qué alertas se
+generan; si cambiarlo no cambia el contenido de `GET /api/alerts`, está mal.
+
+`checkFrequency` es `"daily"` | `"weekly"` —la UI los etiqueta "Diaria" y "Semanal"—
+y es la cadencia del hogar, que funciona como filtro de elegibilidad del lote del
+cron, no como un cron propio (`SDD.md` §6.3). No admite `"6h"` ni `"12h"`: no había
+pantalla que los ofreciera.
 
 ### `GET /api/export/:view?year=2026&month=7`
 `view`: `analysis` | `transactions` | `budget` | `annual`. Devuelve

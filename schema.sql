@@ -72,8 +72,12 @@ CREATE TABLE transactions (
   merchant     TEXT NOT NULL,
   detail       TEXT,
   amount_cents INTEGER NOT NULL,
+  -- Sin 'bank': Brote no se conecta a ningún banco y las credenciales bancarias no
+  -- se guardan nunca (Ayuda: "¿Brote guarda mis claves del banco?" → "No"). Un
+  -- resumen bancario que el usuario baja y sube entra como 'import', igual que un
+  -- CSV. Dejar 'bank' en el dominio insinuaba una integración que el producto niega.
   source       TEXT NOT NULL CHECK (source IN
-                 ('ticket_photo','quick_total','full_detail','recurring','import','bank')),
+                 ('ticket_photo','quick_total','full_detail','recurring','import')),
   receipt_id   TEXT,
   rule_id      TEXT REFERENCES recurring_rules(id) ON DELETE SET NULL,
   created_by   TEXT REFERENCES users(id),
@@ -131,6 +135,11 @@ CREATE TABLE fixed_expenses (
 
 -- Se carga POR PRODUCTO: nombre, precio total y en cuántas cuotas. La cuota
 -- mensual se deriva, no se pide. Ver SDD §4.5.
+--
+-- started_on + count_total son el calendario de cuotas y la ÚNICA verdad sobre
+-- cuántas se pagaron: count_paid se deriva de las fechas, no se guarda. Tenerlo
+-- como columna editable creaba dos respuestas para la misma pregunta — la barra de
+-- progreso decía cinco y el total del mes contaba seis. Ver SDD §5.0 y §4.5.
 CREATE TABLE installments (
   id            TEXT PRIMARY KEY,
   household_id  TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
@@ -138,9 +147,8 @@ CREATE TABLE installments (
   retailer_id   TEXT REFERENCES retailers(id),  -- dónde se compró, opcional
   total_cents   INTEGER NOT NULL,           -- precio del producto
   count_total   INTEGER NOT NULL,           -- 3 | 6 | 9 | 12 | 18 | 24
-  count_paid    INTEGER NOT NULL DEFAULT 0,
   monthly_cents INTEGER NOT NULL,           -- round(total_cents / count_total)
-  started_on    TEXT
+  started_on    TEXT NOT NULL               -- sin esto no hay calendario de cuotas
 );
 CREATE INDEX idx_installments_household ON installments(household_id);
 
@@ -330,7 +338,10 @@ CREATE TABLE alert_prefs (
   household_id   TEXT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
   due_days_ahead INTEGER NOT NULL DEFAULT 3,
   price_drop_pct REAL NOT NULL DEFAULT 5,
-  check_frequency TEXT NOT NULL DEFAULT '6h' CHECK (check_frequency IN ('6h','12h','24h')),
+  -- El toggle de Conexiones ofrece dos opciones y las etiqueta "Diaria" y "Semanal"
+  -- (SDD §6.3). Antes esta columna admitía '6h','12h','24h': ni podía representar
+  -- "Semanal" ni ofrecía 6h ni 12h en ninguna pantalla.
+  check_frequency TEXT NOT NULL DEFAULT 'daily' CHECK (check_frequency IN ('daily','weekly')),
   send_hour      TEXT NOT NULL DEFAULT '08:00',   -- hora local del hogar
   by_mail        INTEGER NOT NULL DEFAULT 1,      -- "Correo electrónico"
   by_push        INTEGER NOT NULL DEFAULT 1,      -- "Notificación en el teléfono"
@@ -366,9 +377,9 @@ CREATE INDEX idx_jobruns_job ON job_runs(job, started_at DESC);
 -- tabla con la evidencia y el porqué está en SDD §6.2. Día, Jumbo, Disco, Vea y
 -- Farmacity corren VTEX y los cubre UN adaptador parametrizado por dominio.
 --
--- Ojo: cargarlos acá NO los enciende. connections arranca sin filas, así que un
--- comercio está apagado hasta que alguien lo habilita a sabiendas, después de
--- revisar los términos de uso del sitio (SDD §6.2).
+-- Ojo: cargarlos acá no dice nada sobre si están encendidos. connections arranca sin
+-- filas, y qué significa una fila ausente —habilitada, como en el prototipo, o
+-- apagada— es una decisión abierta: SDD §6.2 y §13.4.
 INSERT INTO retailers (id, name, kind, is_wholesale) VALUES
   ('mercadolibre','Mercado Libre','api',0),   -- API oficial documentada
   ('dia','Día','api',0),                      -- VTEX
