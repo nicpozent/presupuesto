@@ -40,13 +40,13 @@ IPC_PROJECTED_MONTHLY_PCT = "2.0"
 [[d1_databases]]
 binding = "DB"
 database_name = "brote"
-database_id = "REEMPLAZAR"
+database_id = "2bfee7e9-6d2b-447d-bdcf-94ba57ffe8d0"
 
 # Cache caliente de cotizaciones e IPC. D1 es la fuente de verdad; KV es cache.
 # TTLs en SDD §6, presupuesto de escrituras en DEPLOY.md §9.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REEMPLAZAR"
+id = "be3651bc55ee4479930a66bd68a31614"
 
 # No hay binding PAGES para cachear HTML: gastaba una escritura de KV por página y
 # el plan gratuito da 1.000 por día. Los precios viven en D1. Ver DEPLOY.md §9.
