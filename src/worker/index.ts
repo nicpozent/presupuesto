@@ -8,7 +8,8 @@ import {
 } from "./auth/session.js";
 import { getHousehold, seedConnections } from "../lib/db/households.js";
 import {
-  createInvite, deleteInvite, getUserById, listInvites, resolveUser, type AppUser,
+  createInvite, deleteInvite, getUserById, listInvites, NotAllowed, resolveUser,
+  type AppUser,
 } from "../lib/db/users.js";
 import { NotFoundInHousehold, type HouseholdContext } from "../lib/db/context.js";
 import { readInflation, readJobHealth, readLatestFx } from "../lib/db/public/macro.js";
@@ -21,6 +22,8 @@ export interface Env {
   APP_URL: string;
   /** Público. El secreto va en Workers Secrets, no acá. */
   GOOGLE_CLIENT_ID: string;
+  /** El único mail que puede crear el hogar. Los demás entran por invitación. */
+  OWNER_EMAIL: string;
   GOOGLE_CLIENT_SECRET: string;
   SESSION_SECRET: string;
   DEFAULT_TIMEZONE: string;
@@ -73,7 +76,17 @@ app.get("/auth/google/callback", async (c) => {
   }
 
   // §7.2 paso 4: el usuario se crea o se busca por su identidad estable, no por mail.
-  const user = await resolveUser(c.env.DB, r.identity);
+  // Un mail que no es el dueño ni tiene invitación no entra y no deja fila.
+  let user;
+  try {
+    user = await resolveUser(c.env.DB, r.identity, c.env.OWNER_EMAIL);
+  } catch (e) {
+    if (e instanceof NotAllowed) {
+      console.warn("login de un mail no habilitado");
+      return c.json(fail("forbidden", "Ese mail no está habilitado en este hogar"), 403);
+    }
+    throw e;
+  }
   const sid = await createSession(c.env.DB, user.id, c.req.header("User-Agent") ?? null);
   const signed = await sign(sid, c.env.SESSION_SECRET);
 

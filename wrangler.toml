@@ -10,6 +10,7 @@
 #   1. database_id       → panel: Storage & Databases → D1 → brote → Database ID
 #   2. id (del KV)       → panel: Storage & Databases → KV → brote-cache → Namespace ID
 #   3. GOOGLE_CLIENT_ID  → Google Cloud Console → APIs & Services → Credentials
+#   4. OWNER_EMAIL       → tu mail de Google, el único que puede crear el hogar
 #
 # Los secretos NO van acá, van en Settings → Variables and Secrets (tipo Secret):
 #   GOOGLE_CLIENT_SECRET   el del cliente OAuth
@@ -49,6 +50,10 @@ not_found_handling = "single-page-application"
 [vars]
 APP_URL = "https://presupuesto.nicopozza.workers.dev"
 GOOGLE_CLIENT_ID = "REEMPLAZAR"
+# El único mail que puede crear el hogar. Sin Access, /auth/google es una ruta pública:
+# si el hogar lo creara el primero que entra, un desconocido que encontrara la URL se
+# quedaría con él. Los demás integrantes entran por invitación (SDD §7.1.1).
+OWNER_EMAIL = "REEMPLAZAR"
 DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires"
 IPC_PROJECTED_MONTHLY_PCT = "2.0"
 
