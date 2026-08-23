@@ -22,8 +22,14 @@ main = "src/worker/index.ts"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 
+# El build lo dispara wrangler, no el panel. Con esto, `npx wrangler deploy` compila
+# la SPA antes de subir, así que funciona aunque el campo "Build command" de Workers
+# Builds esté vacío. El npm ci va acá porque el entorno del build no instala solo.
+# Ver DEPLOY.md §10.5.
+[build]
+command = "npm ci && npm test && npm run build"
+
 # La SPA compilada se sirve desde el mismo Worker: sin CORS, sin dominio aparte.
-# La carpeta la produce `npm run build`, que es el Build command del panel.
 [assets]
 directory = "./dist/client"
 not_found_handling = "single-page-application"

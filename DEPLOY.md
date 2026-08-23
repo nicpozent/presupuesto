@@ -496,22 +496,37 @@ problema. Si algo de esto fuera secreto, no iría en un archivo del repo.
 | Campo | Valor |
 |---|---|
 | Worker name | `brote` — **tiene que coincidir** con `name` en `wrangler.toml` o el build falla |
-| Build command | `npm ci && npm test && npm run build` |
+| Build command | dejalo **vacío**: lo dispara `[build]` de `wrangler.toml` |
 | Deploy command | `npx wrangler deploy` (es el default) |
 | Root directory | vacío |
 
-**El Build command no es opcional y el `npm ci` tampoco.** Dejarlo vacío es el error
-más fácil de cometer acá: el build salta directo al deploy, `dist/client` no existe y
-wrangler corta con
+**El Build command del panel es opcional porque el build lo dispara wrangler.**
+`wrangler.toml` tiene un bloque `[build]`:
+
+```toml
+[build]
+command = "npm ci && npm test && npm run build"
+```
+
+`wrangler deploy` lo ejecuta antes de subir, así que la SPA se compila **aunque el
+campo Build command del panel esté vacío**. Verificado desde un clone pelado, sin
+`node_modules` y sin `dist`: wrangler imprime cada línea con el prefijo
+`[custom build]` y después lee los 4 archivos de `dist/client`.
+
+Esto existe porque el modo de fallar es horrible. Con el campo vacío y sin `[build]`,
+el panel va del clone directo al deploy y wrangler corta con
 
 ```
 ✘ [ERROR] Could not detect a directory containing static files
           (e.g. html, css and js) for the project
 ```
 
-que no dice "te falta el build". Y el `npm ci` explícito hace falta porque el entorno
-no instala las dependencias solo: sin él, `npm run build` no encuentra ni `vite` ni
-`tsc`.
+que suena a un problema de configuración de `[assets]` y no dice en ningún lado que
+faltó compilar. El `npm ci` va adentro del comando porque el entorno del build no
+instala las dependencias solo: sin él, `npm run build` no encuentra ni `vite` ni `tsc`.
+
+Podés poner igual el mismo comando en el campo del panel: no molesta, pero ya no hace
+falta.
 
 La versión de Node la fija `.node-version` (22), que es la que se verificó. Si el panel
 usara otra, el build de Vite puede fallar por algo que no tiene nada que ver con tu
