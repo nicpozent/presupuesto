@@ -484,7 +484,23 @@ Son **dos cosas distintas** y en este orden:
    - Authorized redirect URI: `https://<tu-equipo>.cloudflareaccess.com/cdn-cgi/access/callback`
 
    Con el Client ID y el Client Secret: Zero Trust → **Integrations → Identity
-   providers** → Add new → Google.
+   providers** → Add new → **Google** (no *Google Workspace*: ese pide un dominio
+   administrado y un admin).
+
+   **Anda con una cuenta de Gmail común.** Dos elecciones lo definen:
+   - En la pantalla de consentimiento, **External**, no Internal. *Internal* solo
+     existe para proyectos atados a una organización de Google Cloud; *External* es
+     "cualquiera con una cuenta de Google", que incluye `@gmail.com`.
+   - Conviene apretar **Publish app** para pasar a *In production*. Los scopes que pide
+     Access —`openid email profile`— no son sensibles y no necesitan verificación, y
+     publicando te saca de encima el límite de 100 usuarios de prueba y el
+     consentimiento que vence a los 7 días del modo *Testing*.
+
+   **"External" y "In production" no abren Brote al mundo.** Google solo dice quién es
+   la persona. Quién entra lo decide la policy de Access del punto 2: cualquiera puede
+   autenticarse con Google y quedar afuera igual. Y el Worker valida el `aud` del token
+   contra esta aplicación, así que un token de otra no sirve. La lista corta es la de
+   Access, en un solo lugar.
 2. **La aplicación**: Zero Trust → **Access controls → Applications** → Create new
    application → *Self-hosted and private* → Add public hostname, el hostname de Brote,
    y una policy *Allow* con los mails del hogar en `Emails`.
