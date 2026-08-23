@@ -301,9 +301,12 @@ la antigüedad; nunca se omite el precio ni se reemplaza por una estimación.
 
 ### `PATCH /api/watch/items/:id` · `DELETE /api/watch/items/:id`
 ### `GET /api/retailers`
-Los de fábrica (`householdId: null`) más los del hogar.
+Los de fábrica (`householdId: null`) más los del hogar. Los de fábrica **vienen
+apagados**: `kind` sale de la plataforma verificada de cada tienda (`SDD.md` §6.2) y
+encenderlos es un acto explícito del usuario, que queda en `audit_log`.
 ```json
-[{ "id": "coto", "name": "Coto", "kind": "api", "enabled": true },
+[{ "id": "coto", "name": "Coto", "kind": "scrape", "enabled": false },
+ { "id": "disco", "name": "Disco", "kind": "api", "enabled": true },
  { "id": "r_h1_1", "name": "Vital Mayorista", "kind": "llm", "baseUrl": "https://…",
    "enabled": true, "verified": true }]
 ```
@@ -348,6 +351,20 @@ poniendo `last_checked_at = null`; `202 { "scheduled": true }`.
 El plan se **calcula** desde los precios de las fuentes habilitadas. Apagar Diarco en
 `/api/connections` tiene que cambiar `legs`, `stops` y el ahorro.
 
+Los ítems de cada pata vienen completos, porque la pestaña **Lista de compras**
+(`SDD.md` §4.6) se dibuja con esto y **no tiene endpoint propio**: es el mismo plan
+de §5.6 agrupado por comercio, no un segundo cálculo.
+
+```json
+"legs": [{ "retailerId": "diarco", "retailer": "Diarco", "subtotalCents": 4159000,
+           "items": [{ "itemId": "w_1", "name": "Café molido La Morenita 500 g",
+                       "unit": "500 g", "priceCents": 949000,
+                       "checkedAt": "2026-08-17T11:04:00Z", "stale": false }] }]
+```
+Cada ítem lleva `checkedAt` y `stale`: el total de la lista es **estimado** y la UI
+no lo presenta como lo que va a salir en la caja. El tildado de la casilla es estado
+local del navegador y no se manda al servidor.
+
 ### `GET /api/fx`
 ```json
 { "rates": [{ "currency": "USD", "name": "Dólar estadounidense",
@@ -373,14 +390,23 @@ nunca se presenta como medición (`SDD.md` §5.7).
 
 ### `GET /api/connections`
 ```json
-{ "connections": [{ "retailerId": "diarco", "name": "Diarco", "kind": "scrape",
-                    "enabled": true, "status": "ok", "lastOkAt": "2026-08-17T11:04:00Z",
+{ "connections": [{ "retailerId": "diarco", "name": "Diarco", "kind": "llm",
+                    "enabled": false, "status": "ok", "lastOkAt": null,
                     "lastError": null }],
-  "prefs": { "dueDaysAhead": 3, "priceDropPct": 5, "checkFrequency": "6h" } }
+  "prefs": { "dueDaysAhead": 3, "priceDropPct": 5, "checkFrequency": "6h",
+             "sendHour": "08:00", "byMail": true, "byPush": true,
+             "weeklyDigest": true } }
 ```
 ### `PATCH /api/connections/:retailerId` — `{ "enabled": false }`
 ### `POST /api/connections/custom` — `{ "name": "Almacén Don José", "url": "https://…" }`
-### `PATCH /api/alert-prefs` — `{ "dueDaysAhead": 5, "priceDropPct": 8 }`
+### `PATCH /api/alert-prefs`
+`{ "dueDaysAhead": 5, "priceDropPct": 8, "sendHour": "08:00", "byMail": true,
+   "byPush": true, "weeklyDigest": true }`
+
+Son las seis cosas que edita Conexiones y que gobiernan la pestaña de Avisos
+(`SDD.md` §4.6): hora, baja mínima y canal. `priceDropPct` filtra de verdad qué
+alertas se generan; si cambiarlo no cambia el contenido de `GET /api/alerts`, está
+mal.
 
 ### `GET /api/export/:view?year=2026&month=7`
 `view`: `analysis` | `transactions` | `budget` | `annual`. Devuelve

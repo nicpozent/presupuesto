@@ -302,6 +302,9 @@ CREATE TABLE receipts (
   ocr_payload   TEXT,                        -- JSON crudo del OCR
   transaction_id TEXT REFERENCES transactions(id) ON DELETE SET NULL,
   uploaded_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  -- El teléfono promete "la foto se descarta a los 30 días" (SDD §4.8), así que es
+  -- un requisito: el cron diario barre lo que pasó los 30 días y borra fila y objeto
+  -- en R2. La transacción que salió del ticket queda; la imagen no.
   deleted_at    TEXT                         -- borrado real: también el objeto en R2
 );
 
@@ -319,11 +322,18 @@ CREATE TABLE alerts (
 );
 CREATE INDEX idx_alerts_household ON alerts(household_id, created_at DESC);
 
+-- Lo que edita el usuario en Conexiones (SDD §4.9) y que gobierna la pestaña de
+-- Avisos (§4.6): hora, baja mínima y canal. Si cambiar la baja mínima no cambia qué
+-- avisos entran, está mal.
 CREATE TABLE alert_prefs (
   household_id   TEXT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
   due_days_ahead INTEGER NOT NULL DEFAULT 3,
   price_drop_pct REAL NOT NULL DEFAULT 5,
-  check_frequency TEXT NOT NULL DEFAULT '6h' CHECK (check_frequency IN ('6h','12h','24h'))
+  check_frequency TEXT NOT NULL DEFAULT '6h' CHECK (check_frequency IN ('6h','12h','24h')),
+  send_hour      TEXT NOT NULL DEFAULT '08:00',   -- hora local del hogar
+  by_mail        INTEGER NOT NULL DEFAULT 1,      -- "Correo electrónico"
+  by_push        INTEGER NOT NULL DEFAULT 1,      -- "Notificación en el teléfono"
+  weekly_digest  INTEGER NOT NULL DEFAULT 1       -- "Resumen semanal"
 );
 
 CREATE TABLE audit_log (
@@ -351,15 +361,21 @@ CREATE TABLE job_runs (
 );
 CREATE INDEX idx_jobruns_job ON job_runs(job, started_at DESC);
 
--- Comercios de v1
+-- Comercios de v1. El kind sale de la plataforma verificada de cada tienda; la
+-- tabla con la evidencia y el porqué está en SDD §6.2. Día, Jumbo, Disco, Vea y
+-- Farmacity corren VTEX y los cubre UN adaptador parametrizado por dominio.
+--
+-- Ojo: cargarlos acá NO los enciende. connections arranca sin filas, así que un
+-- comercio está apagado hasta que alguien lo habilita a sabiendas, después de
+-- revisar los términos de uso del sitio (SDD §6.2).
 INSERT INTO retailers (id, name, kind, is_wholesale) VALUES
-  ('carrefour','Carrefour','scrape',0),
-  ('coto','Coto','scrape',0),
-  ('dia','Día','scrape',0),
-  ('diarco','Diarco','scrape',1),
-  ('jumbo','Jumbo','scrape',0),
-  ('disco','Disco','scrape',0),
-  ('vea','Vea','scrape',0),
-  ('mercadolibre','Mercado Libre','api',0),
-  ('farmacity','Farmacity','scrape',0),
+  ('mercadolibre','Mercado Libre','api',0),   -- API oficial documentada
+  ('dia','Día','api',0),                      -- VTEX
+  ('jumbo','Jumbo','api',0),                  -- VTEX
+  ('disco','Disco','api',0),                  -- VTEX
+  ('vea','Vea','api',0),                      -- VTEX
+  ('farmacity','Farmacity','api',0),          -- VTEX
+  ('coto','Coto','scrape',0),                 -- adaptador propio
+  ('carrefour','Carrefour','scrape',0),       -- adaptador propio
+  ('diarco','Diarco','llm',1),                -- sin tienda pública estable: vía §6.1
   ('almacen','Almacén del barrio','manual',0);

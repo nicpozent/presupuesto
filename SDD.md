@@ -96,16 +96,30 @@ aislamiento.
 
 ## 4. Vistas
 
-**Nueve** vistas, navegación lateral fija de 252px. El contenido tiene
+**Diez** entradas de navegación, barra lateral fija de 252px. El contenido tiene
 `max-width: 1180px`. Todas las medidas son las del prototipo a 1440px.
 
-Los identificadores del prototipo, para que no se pierda la correspondencia:
-`overview`, `analysis`, `transactions`, `income`, `budgets`, `watch`, `markets`,
-`connections`, `help`, más `onboarding` (§4.10).
+El orden de la navegación es el del prototipo y no es alfabético ni arbitrario —va
+de lo general a lo periférico— así que se respeta:
 
-Falta una: el prototipo tiene también `mobile` (`screenshots/12-en-el-telefono.png`)
-y este documento no la describe. **Sin especificar**, ver §13.4. `18-perfil-valentina.png`
-tampoco tiene sección; los screenshots `16` y `17` son los diálogos de §4.3.
+| # | Identificador | Etiqueta | §  |
+|---|---|---|---|
+| 1 | `overview` | Resumen | §4.1 |
+| 2 | `analysis` | Análisis de gastos | §4.2 |
+| 3 | `transactions` | Movimientos | §4.3 |
+| 4 | `income` | Ingresos y compromisos | §4.4 |
+| 5 | `budgets` | Presupuesto y objetivos | §4.5 |
+| 6 | `watch` | Precios | §4.6 |
+| 7 | `markets` | Divisas e inflación | §4.7 |
+| 8 | `mobile` | En el teléfono | §4.8 |
+| 9 | `connections` | Conexiones | §4.9 |
+| 10 | `help` | Ayuda | §4.10 |
+
+`onboarding` (§4.11) no está en la navegación. **Precios lleva un badge** con la
+cantidad de avisos sin leer; es la única entrada que lo lleva.
+
+`18-perfil-valentina.png` no tiene sección propia: es Movimientos filtrado por
+persona (§4.3). Los screenshots `16` y `17` son los diálogos de §4.3.
 
 ### 4.1 Resumen (`screenshots/01-resumen.png`)
 
@@ -211,12 +225,39 @@ objetivos de ahorro con meta, acumulado y fecha.
   diferencia contra el más barato; plan de compra dividida calculado agrupando cada
   producto en el comercio que hoy lo tiene más barato (si gana uno solo, lo dice).
   Grilla `repeat(auto-fit, minmax(280px, 1fr))`.
-- **Lista de compras** (`09`): **sin especificar en este documento.** La pantalla
-  existe en el prototipo y en el screenshot; su comportamiento no está escrito acá.
-  Ver §13.4.
-- **Avisos** (`10`): **sin especificar en este documento.** Ídem. Lo único escrito es
-  que los avisos siguen la configuración de Conexiones —hora, baja mínima— y que los
-  tipos de alerta están en `schema.sql` y en `api-contract.md`. Ver §13.4.
+- **Lista de compras** (`09`): el plan de compra dividida de §5.6 hecho lista para
+  usar en el comercio. **No es un cálculo nuevo**: son los mismos productos seguidos,
+  cada uno en el comercio que hoy lo tiene más barato entre las fuentes habilitadas,
+  agrupados por comercio. Una tarjeta por comercio en
+  `repeat(auto-fit, minmax(300px, 1fr))`, con el nombre del comercio en Caprasimo
+  19px y su subtotal a la derecha; adentro una fila por producto con casilla, nombre,
+  unidad en gris y precio.
+  - La casilla es **estado local del navegador**, no del hogar: tildar "café" es
+    "ya lo puse en el carrito", no un dato que valga guardar en D1. Un producto
+    tildado se muestra en gris y su precio sigue contando en el total.
+  - Tarjeta de cierre con "Total estimado" (todos los productos) y el pie:
+    "Falta comprar {resto}. La lista se arma con tus productos seguidos al precio más
+    bajo de hoy, agrupados por comercio." Dos números distintos —total y falta
+    comprar— porque tildar no cambia el total.
+  - **Estimado quiere decir estimado**: cada precio es el último consultado, con su
+    fecha, y un precio `stale` se muestra con su antigüedad (regla 5). El total no
+    es lo que va a salir en la caja y el copy no lo promete.
+- **Avisos** (`10`): las alertas ya generadas, más nuevas arriba, una tarjeta por
+  aviso. Cada tarjeta lleva marca, título, cuerpo con los dos precios, antigüedad en
+  palabras ("hace 2 h", "ayer", "hace 2 días") y una acción.
+  - **La marca y el color dicen la dirección**: `↓` sobre `--color-accent-2-200`
+    cuando bajó —es una oportunidad—, `↑` sobre `--color-accent-100` cuando subió.
+    El color no es decorativo y no se puede invertir.
+  - El cuerpo dice **de dónde a dónde y contra qué**, nunca solo el porcentaje:
+    "$ 36.800 → $ 33.500. Por debajo de los $ 34.000 que pediste que te avisemos."
+    Un aviso de baja sin el precio anterior y el comercio no es un aviso, es un
+    rumor (regla 5).
+  - Los tipos que se muestran acá son `price_drop` y los de suba de canasta; los
+    `due_soon`, `budget_over` y `fx_move` viven en sus pantallas. `job_stale` (§13.2)
+    también aparece acá, distinguible: no habla de la plata del hogar.
+  - Pie: "Los avisos siguen la configuración de Conexiones: hora, baja mínima y
+    canal." Los tres los edita el usuario en §4.9, y son de verdad tres: si cambiar
+    la baja mínima no cambia qué avisos entran, está mal.
 
 Comercios en v1: Carrefour, Coto, Día, Diarco, Jumbo, Disco, Vea, Mercado Libre,
 Farmacity, más "Almacén del barrio" como entrada manual.
@@ -232,14 +273,51 @@ separado —nunca promediadas, regla 7 de `CLAUDE.md`—, serie de ocho semanas,
 del INDEC histórico y último dato, con el mes en curso marcado como estimado cuando
 todavía no salió el oficial (§5.7).
 
-### 4.8 Conexiones (`13-conexiones.png`)
+### 4.8 En el teléfono (`12-en-el-telefono.png`)
+
+Vista propia (`mobile`), y va en la navegación entre Divisas e inflación y
+Conexiones. No es "la app en chico": es la lista corta de lo que se hace **de pie**.
+El copy del prototipo lo dice y es la regla de diseño de toda la sección:
+
+> El teléfono no repite el escritorio: solo lleva lo que se hace de pie, en el
+> comercio o en la calle. Sacar la foto del ticket, ver cuánto queda del mes, la
+> lista de compras con precios de hoy y los avisos de baja.
+
+Cuatro pantallas, y **son cuatro a propósito**: lo que no está acá se hace sentado.
+Nada de análisis, nada de configuración, nada de edición de reglas.
+
+| Pantalla | Qué lleva |
+|---|---|
+| **Registrar** | "Sacale una foto al ticket" · "Brote lee las líneas y reconoce los productos que seguís." Zona de subida con borde punteado y el botón redondo de cámara, más "Elegir de la galería" y "Cargar solo el total". Debajo, "Último cargado" con comercio, importe y antigüedad |
+| **Agosto** | "Gastado este mes" con el total del mes, "Queda …" con el porcentaje, y los sobres con su barra y su estado. Solo lectura |
+| **Lista** | "Total estimado" y la misma lista agrupada por comercio de §4.6, con casillas. Es la pantalla que se usa adentro del supermercado |
+| **Avisos** | Las tarjetas de §4.6, y "Ver todos los precios" al pie |
+
+Dos cosas que salen de acá y valen para todo el producto:
+
+- **"El teléfono pide permiso. La foto se descarta a los 30 días."** Es una promesa
+  al usuario, así que es un requisito: las fotos de tickets se borran —fila y objeto
+  en R2— a los 30 días de subidas, con un barrido en el cron diario. Está en §10 y en
+  la pantalla de privacidad. Prometerlo en el teléfono y no borrarlo es la clase de
+  cosa que no se arregla con un cambio de copy.
+- El total del mes y los sobres del teléfono salen de las mismas respuestas que el
+  escritorio (§5.0, §5.1). El teléfono **no** tiene su propio cálculo: sería la
+  cuarta pantalla del test de número único de §13.6.
+
+### 4.9 Conexiones (`13-conexiones.png`)
 
 El usuario administra sus propias fuentes: activar y desactivar cada comercio,
 agregar una fuente nueva por URL, ver estado y última consulta, configurar
 frecuencia y días de anticipación de las alertas, y ejercer privacidad (exportar
 todo, borrar todo).
 
-### 4.9 Ayuda (`14-ayuda.png`)
+Los comercios de fábrica **arrancan apagados** y encenderlos es un acto explícito,
+que queda en `audit_log` (§6.2). Esta pantalla es también donde se editan las seis
+preferencias que gobiernan la pestaña de Avisos (§4.6) —hora, baja mínima, correo,
+notificación, resumen semanal y días de anticipación—, y donde se nombra a Cohere
+como el proveedor que lee los tickets y los precios (§10).
+
+### 4.10 Ayuda (`14-ayuda.png`)
 
 Centro de ayuda dentro de la app, en el menú principal. Siete secciones con 26
 temas: nominal contra real, gastos recurrentes, de dónde sale cada total,
@@ -255,7 +333,7 @@ El contenido responde a las confusiones reales que aparecieron construyendo el
 producto — sobre todo por qué la suma de movimientos no da el gasto del mes.
 Es contenido del producto: va en el repo, no en un CMS.
 
-### 4.10 Onboarding (`15-onboarding.png`)
+### 4.11 Onboarding (`15-onboarding.png`)
 
 Tres pasos con puntos de progreso: hogar e ingresos, primeras categorías, primeros
 productos a seguir.
@@ -535,10 +613,62 @@ Costo: una llamada al modelo por producto por comercio por corrida. Con lotes de
 y cuatro corridas diarias es acotado, pero conviene cachear el HTML por unas horas
 en KV para no pagar dos veces la misma página.
 
-**Antes de habilitar cualquier consulta automática**, revisar los términos de uso
-del sitio. Los comercios de fábrica que ofrecen API oficial van por API
-(`kind = 'api'`), que siempre es preferible: más rápido, más barato y más estable.
-Cuál va por cuál sigue siendo una decisión del negocio.
+### 6.2 Qué vía usa cada comercio de fábrica
+
+Esto era una decisión pendiente y ya no lo es: la vía técnica de cada uno está
+determinada por la plataforma sobre la que corre su tienda, y eso es verificable.
+Cinco de los diez corren **VTEX**, que expone un endpoint JSON de catálogo del
+propio storefront —el mismo dato que la página renderiza— y por lo tanto no
+necesitan ni scraping de HTML ni una llamada al modelo:
+
+```
+GET https://{sitio}/api/catalog_system/pub/products/search/{término}?_from=0&_to=0
+→ [ { productName, brand, items: [ { sellers: [ { commertialOffer:
+      { Price, ListPrice, IsAvailable, AvailableQuantity } } ] } ] } ]
+```
+
+| Comercio | `kind` | Plataforma verificada | Cómo se resuelve el precio |
+|---|---|---|---|
+| Mercado Libre | `api` | API pública documentada | API oficial, con su token |
+| Día | `api` | VTEX (`x-vtex-*`) | Endpoint de catálogo |
+| Jumbo | `api` | VTEX | Endpoint de catálogo |
+| Disco | `api` | VTEX | Endpoint de catálogo |
+| Vea | `api` | VTEX | Endpoint de catálogo |
+| Farmacity | `api` | VTEX | Endpoint de catálogo |
+| Coto | `scrape` | No VTEX | Adaptador propio |
+| Carrefour | `scrape` | No VTEX (Apache) | Adaptador propio |
+| Diarco | `llm` | Sin tienda pública estable | La vía de §6.1, como un sitio del usuario |
+| Almacén del barrio | `manual` | — | Lo carga el usuario |
+
+Jumbo, Disco y Vea son del mismo grupo y comparten plataforma: **un solo adaptador
+VTEX parametrizado por dominio** cubre los cinco, no cinco adaptadores. Es el
+argumento más fuerte para empezar por acá en el paso 5 de §14.
+
+Dos detalles que salen de probar el endpoint y que hay que respetar:
+
+- **El campo es `Price`**, en pesos y como decimal. `ListPrice` puede venir con
+  valores absurdos —se vio un `1198347.0` junto a un `Price` de `14500.0`— así que
+  no se usa, y todo precio pasa por una validación de rango antes de guardarse. Un
+  precio que no pasa la validación es un fallo (`price_fetch_log`), no un dato.
+- Pesos decimales a centavos enteros: `round(Price * 100)`, una sola vez, al
+  guardar. Ver §5.8.
+
+**Lo que sigue siendo del negocio y no de la ingeniería** es el permiso, no el
+método. Antes de encender cualquier consulta automática hay que revisar los términos
+de uso del sitio; que el endpoint sea público y que `robots.txt` no lo prohíba es
+necesario y no es suficiente. Por eso:
+
+1. Un comercio de fábrica arranca **apagado** (`connections.enabled = 0`) hasta que
+   alguien lo habilita a sabiendas. La base no viene con consultas encendidas.
+2. La revisión de términos se anota en `audit_log` con la acción
+   `connection_toggle`: queda quién lo encendió y cuándo.
+3. Las consultas van al ritmo del cron —lotes de 40, cada 6 h, con timeout por
+   comercio— y no se acelera para "probar". Un comercio que responde `429` o `403`
+   se marca `status = 'degraded'` y se deja de consultar hasta que alguien lo mire.
+
+API siempre es preferible a scraping: más rápido, más barato, más estable y menos
+invasivo con el sitio. Un comercio que hoy está en `scrape` y mañana publica una
+API se pasa a `api`, que es exactamente para lo que existe la interfaz de §6.
 
 ## 7. Autenticación con Google
 
@@ -576,7 +706,7 @@ Por eso `users.household_id` es nullable: un usuario válido todavía sin hogar 
 estado legítimo del sistema, no un error.
 
 1. **Primer ingreso de la instalación**: no hay ningún hogar. Se crea el hogar, se
-   crea el usuario con `role = 'owner'` y arranca el onboarding de §4.10.
+   crea el usuario con `role = 'owner'` y arranca el onboarding de §4.11.
 2. **Ingreso de un mail desconocido**: se busca en `invites` una invitación vigente
    (`email` coincide, `expires_at` en el futuro, `accepted_at IS NULL`). Si hay, el
    usuario se crea con el `household_id` de la invitación y `role = 'member'`, y la
@@ -646,6 +776,11 @@ en el Worker en streaming. Nombres de archivo `brote-<vista>-<período>.csv`.
    crea automáticamente.
 5. Los productos detectados se ofrecen como sugerencias para seguir precio.
 6. La imagen se puede borrar y el borrado elimina el objeto en R2.
+7. **A los 30 días la imagen se borra sola**, fila y objeto en R2, en un barrido del
+   cron diario. No es una mejora opcional: la pantalla del teléfono se lo promete al
+   usuario con esas palabras (§4.8). El movimiento que salió del ticket queda; la
+   foto no. Un `receipts` con `deleted_at` y el objeto todavía en R2 es un bug de
+   privacidad, y el test que lo cubre va con el barrido.
 
 Nada de la foto sale de la infraestructura del proyecto salvo hacia Cohere, que es
 el proveedor de OCR y el mismo que lee precios en HTML (§6.1). **Se nombra en la
@@ -735,6 +870,9 @@ estado vacío diseñado, no un cero:
 | Presupuesto | Las diez categorías con tope en cero, listas para poner el primero | "Poner topes" |
 | Precios | Sin productos seguidos no hay canasta ni plan de compra | "Agregar producto" y las sugerencias del primer ticket |
 | Divisas e inflación | **Funciona desde el día uno**: no depende de datos del usuario | — |
+| Precios · Lista de compras | Sin productos seguidos no hay lista. No mostrar tarjetas de comercio vacías ni un "Total estimado $ 0" | "Agregar producto" |
+| Precios · Avisos | Sin avisos todavía: decir que se generan cuando un precio baja de lo que pidió, no "No hay información disponible" | "Configurar los avisos" |
+| En el teléfono | Registrar funciona desde el día uno; Agosto, Lista y Avisos heredan el estado vacío de su pantalla de escritorio | "Sacale una foto al ticket" |
 | Conexiones | Los diez comercios de fábrica, todos apagados salvo los que elija | "Activar los que uses" y "Agregar una fuente" |
 | Ayuda | Funciona desde el día uno | — |
 
@@ -813,20 +951,17 @@ El mecanismo:
 
 ### 13.4 Decisiones abiertas
 
-Tres. Ninguna bloquea el orden de §14 hasta el paso 5.
+Una. Las otras dos que estaban acá se cerraron: la vía de cada comercio de fábrica
+quedó resuelta en §6.2, y las pantallas que faltaban están escritas (§4.6 y §4.8).
 
 1. **El insight de suscripciones** (§4.2). Brote ve el cargo, no el uso. O el usuario
    marca a mano una suscripción como sin usar, o el insight se reformula sobre lo
    observable —el cargo subió más que el IPC, o viene cobrándose seis meses sin que
    nadie lo toque— y se cambia la copy del prototipo. Hasta que se decida, no se
    implementa la afirmación de uso.
-2. **Qué comercios de fábrica van por API y cuáles por scraping** (§6.1). Depende de
-   los términos de uso de cada sitio y es una decisión del negocio, no técnica.
-3. **Pantallas que existen en el prototipo y no están escritas acá**: las pestañas
-   *Lista de compras* y *Avisos* de §4.6, y la vista `mobile` (§4). Están en los
-   screenshots, así que el diseño existe; lo que falta es la especificación. No se
-   implementan a partir de la captura: primero se escriben acá. Es la regla de
-   `CLAUDE.md` —si algo falta, preguntar— y este documento es dónde se contesta.
+Lo que **no** es una decisión abierta, aunque lo parezca: revisar los términos de uso
+de cada comercio antes de encenderlo (§6.2). Eso es un paso del procedimiento, con su
+default en apagado y su registro en `audit_log`; no bloquea escribir el código.
 
 ### 13.5 Objetivos y límites
 
@@ -871,7 +1006,11 @@ tocan producción.
    recálculo. Tests de §5.0, §5.1 y §5.2, más el test de número único de §13.6.
 3. Resumen y Análisis de gastos con datos reales.
 4. Presupuesto, objetivos, ingresos y compromisos.
-5. Precios: un solo comercio de punta a punta, después los demás por adaptador.
+5. Precios: **el adaptador VTEX primero**, que con un solo adaptador parametrizado
+   por dominio cubre cinco de los diez comercios de fábrica (§6.2); después Mercado
+   Libre por su API, y al final los de adaptador propio y la vía del modelo de §6.1.
+   Lista de compras y Avisos (§4.6) salen del mismo cálculo de §5.6: no se les
+   escribe una fórmula aparte.
 6. Divisas e inflación por Cron (§4.7), con `job_runs` y la alerta `job_stale` de
    §13.2 en la misma etapa: un cron sin vigilancia no se nota cuando se cae.
 7. Fotos de tickets y OCR.
