@@ -899,6 +899,35 @@ Con OTP la persona pone su mail y recibe un código de seis dígitos. Con una du
 de sesión larga en Access se escribe una vez por mes, no por visita. Andan los dos con
 cuentas de Gmail comunes.
 
+**Cuál es más seguro: Google, y por una razón concreta.** No es "OAuth es mejor".
+
+OTP es **un solo factor: poder leer la casilla**. Quien lea ese mail entra a Brote y no
+hay nada más en el camino. Google, en cambio, **hereda lo que proteja a la cuenta de
+Google**: si tiene 2FA o una passkey, Brote queda protegido por eso también, porque
+Google no emite la identidad sin ese factor.
+
+Eso no es un empate con ventajas y desventajas, es un orden estricto:
+
+- Con OTP el código **llega al Gmail**, así que comprometer el Gmail compromete Brote
+  igual, por los dos caminos.
+- El techo de OTP es el acceso a la casilla. El **piso** de Google es el acceso a la
+  casilla **más** el segundo factor.
+- Google puede ser más fuerte que la casilla; OTP nunca.
+
+Y la diferencia que más pesa: **resistencia al phishing**. Un código de seis dígitos por
+mail se puede reusar en vivo —una página falsa te pide entrar, pedís el código, lo pegás
+ahí, el atacante lo usa—. Ese ataque funciona contra OTP y contra TOTP; **no** funciona
+contra una passkey, porque la credencial está atada al dominio real.
+
+Para una app que tiene todos los gastos del hogar adentro, eso justifica los quince
+minutos de Google Cloud Console. Si igual se elige OTP, que sea a sabiendas y con 2FA en
+ese Gmail, porque ahí es el único factor y carga con todo.
+
+**Lo que pesa más que esta decisión**: la ruta `workers.dev` encendida no pasa por
+Access, y con eso ninguna de las dos opciones protege nada —cualquiera con la URL
+entra—. Apagarla vale más que toda esta comparación. Lo segundo, que la lista de mails
+de la policy tenga los dos o tres que hacen falta y nada más.
+
 Lo único que cambia entre ambos es de dónde sale la identidad estable, y está resuelto
 en un solo lugar: `identityKey()` prefiere el claim `sub` del token y cae al email
 cuando el proveedor no lo manda —con OTP el email **es** la identidad—. Se guarda en
