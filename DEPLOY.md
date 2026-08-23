@@ -301,10 +301,20 @@ producción con staging es la forma más rápida de corromper datos reales.
 
 ## 7. Deploy continuo
 
-Conectá el repo desde **Workers & Pages → tu Worker → Settings → Build**, o usá la
-action oficial:
+Dos caminos, y la diferencia importante es qué pasa con las migraciones.
+
+**a) Desde el panel (Workers Builds).** El más simple, y el paso a paso está en §10.
+Requiere que `wrangler.toml` esté commiteado, y **no corre migraciones ni tests**: las
+migraciones se aplican a mano en la consola de D1 (§10.2).
+
+**b) Con GitHub Actions.** Más piezas, pero el pipeline hace todo:
 
 ```yaml
+- run: npm ci && npm test          # 32 tests: si algo se rompe, no se despliega
+- uses: cloudflare/wrangler-action@v3
+  with:
+    apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    command: d1 migrations apply brote --remote
 - uses: cloudflare/wrangler-action@v3
   with:
     apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -312,8 +322,10 @@ action oficial:
 ```
 
 El token se crea en **My Profile → API Tokens** con la plantilla *Edit Cloudflare
-Workers*. Las migraciones de D1 corren como paso previo al deploy, nunca a mano en
-producción.
+Workers*. Acá sí las migraciones corren como paso previo al deploy y nunca a mano.
+
+Si vas por (a), la contrapartida es que el checklist de release lo hacés vos: aplicar
+la migración antes de que el deploy salga, y correr `npm test` local. Ver §10.9.
 
 ---
 
@@ -393,6 +405,140 @@ verificado.
   renglón que cuesta desde el primer ticket.
 - **Queues**: si el lote deja de entrar, son 5 USD/mes del plan Workers Paid. Con
   lotes de 40 pares y cuatro corridas no hace falta.
+
+---
+
+## 10. Desplegar desde el panel de Cloudflare (Workers Builds)
+
+Si no querés correr `wrangler deploy` desde tu máquina, el panel puede desplegar solo
+en cada push. Cambia **quién** ejecuta el deploy, no cómo está armado el proyecto.
+
+**Lo primero, porque es lo que rompe:** `wrangler.toml` **tiene que estar
+commiteado**. Workers Builds corre `npx wrangler deploy`, y de ese archivo saca el
+nombre del Worker y todos los bindings. Está en el repo con tres `REEMPLAZAR`.
+
+### 10.1 Crear los recursos (una vez, desde el panel)
+
+| Recurso | Dónde | Nombre |
+|---|---|---|
+| Base D1 | Storage & Databases → D1 → Create | `brote` |
+| Namespace KV | Storage & Databases → KV → Create | `brote-cache` |
+| Bucket R2 | R2 → Create bucket | `brote-receipts` |
+
+Anotá el **Database ID** de D1 y el **Namespace ID** de KV: van en `wrangler.toml`.
+
+### 10.2 Cargar el esquema
+
+**Workers Builds no corre migraciones.** Es lo que más sorprende: el deploy sale bien
+y la primera request falla porque no hay tablas. Desde el panel: **D1 → brote →
+Console**, pegar el contenido de `migrations/0001_init.sql` y ejecutar. Son 42
+comandos y quedan 26 tablas.
+
+Para verificar, en la misma consola:
+
+```sql
+select count(*) as tablas from sqlite_master where type='table';
+select kind, count(*) from retailers group by kind;
+```
+
+Tienen que dar 26 tablas, y los diez comercios repartidos en `api` 6, `scrape` 2,
+`llm` 1, `manual` 1 (§6.2 del SDD).
+
+Cada migración nueva se aplica igual, a mano y en orden. Es el costo de no tener
+`wrangler` en el circuito: anotalo en el checklist de release.
+
+### 10.3 Access con Google
+
+Igual que §3, que no cambia: Zero Trust → Access → Applications → Self-hosted, dominio
+`brote.example.com`, Google como IdP, policy *Allow* con los mails del hogar. De ahí
+sale el **Application Audience (AUD) Tag**, que es el tercer `REEMPLAZAR`.
+
+### 10.4 Completar `wrangler.toml` y commitear
+
+```toml
+CF_ACCESS_TEAM_DOMAIN = "tu-equipo.cloudflareaccess.com"
+CF_ACCESS_AUD = "el AUD tag de 10.3"
+APP_URL = "https://brote.example.com"
+database_id = "el Database ID de 10.1"
+id = "el Namespace ID de 10.1"
+```
+
+Los cinco son identificadores de tu cuenta, **no credenciales**: se commitean sin
+problema. Si algo de esto fuera secreto, no iría en un archivo del repo.
+
+### 10.5 Conectar el repo
+
+**Workers & Pages → Create → Workers → Import a repository**, elegí
+`nicpozent/presupuesto` y la rama.
+
+| Campo | Valor |
+|---|---|
+| Worker name | `brote` — **tiene que coincidir** con `name` en `wrangler.toml` o el build falla |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` (es el default) |
+| Root directory | vacío |
+
+`npm run build` corre `tsc --noEmit && vite build`: si algo no tipa, el build falla y
+no se despliega. Es a propósito.
+
+### 10.6 El secreto
+
+El único de la v1 es el del modelo, y va **fuera** del repo: Workers & Pages → brote →
+Settings → **Variables and Secrets** → Add → tipo **Secret**, nombre
+`COHERE_API_KEY`.
+
+Ojo con la distinción del panel, que se confunde fácil:
+
+- **Settings → Variables and Secrets**: lo que ve el Worker **en ejecución**. Acá va
+  `COHERE_API_KEY`.
+- **Settings → Build → Build variables and secrets**: solo durante el build, el Worker
+  no las ve. Brote no necesita ninguna.
+
+### 10.7 Comprobar
+
+```bash
+curl -i https://brote.example.com/api/health
+```
+
+Tiene que dar `200` y `{"ok":true,"service":"brote"}`. `/api/health` es la única ruta
+sin Access, justamente para esto.
+
+Después, en el navegador: entrar, pasar por Google, y ver el nombre del hogar. El
+primer mail que entra crea el hogar y queda `owner` (`SDD.md` §7.1.1).
+
+```bash
+curl -i https://brote.example.com/api/me
+```
+
+Sin pasar por Access tiene que dar `401 unauthenticated`. Si diera `200`, el Worker
+está sirviendo por una ruta que no pasa por Access: apagá la ruta `workers.dev` en
+Settings → Domains & Routes.
+
+### 10.8 Los cron
+
+Salen de `[triggers]` en `wrangler.toml`, así que el primer deploy los crea. Se ven en
+Settings → Trigger Events. **No los edites en el panel**: el próximo deploy los
+sobrescribe con lo que diga el archivo.
+
+### 10.9 Qué se pierde y cómo se compensa
+
+| Con `wrangler` desde tu máquina | Desde el panel |
+|---|---|
+| `npm test` antes de desplegar | No corre. El build solo tipa: los 32 tests no se ejecutan |
+| Migraciones con `wrangler d1 migrations apply` | A mano en la consola de D1 (§10.2) |
+| `wrangler tail` para logs en vivo | Panel → Workers → brote → Logs |
+
+Lo primero es lo que importa: **el panel no corre los tests**. Si querés que un test
+roto frene el deploy, poné `npm test && npm run build` como Build command. Con la
+matemática de §5 adentro, vale la pena.
+
+### 10.10 Builds y el plan gratuito
+
+Workers Builds tiene su propia cuota de minutos de build, aparte de los límites de §9.
+No la pude confirmar en la documentación pública, así que **miralo en Workers & Pages →
+tu cuenta → Builds antes de conectar un repo con muchos pushes**. Un proyecto de un
+hogar con pushes ocasionales no debería acercarse, pero es el segundo número de este
+documento que no está verificado (el otro son los asientos de Access, §9).
 
 ---
 
