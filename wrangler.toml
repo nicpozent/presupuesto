@@ -7,13 +7,14 @@
 # Hay TRES valores para reemplazar antes del primer deploy. Ninguno es secreto
 # —son identificadores de tu cuenta, no credenciales— así que se commitean:
 #
-#   1. database_id     → panel: Storage & Databases → D1 → brote → Database ID
-#   2. id (del KV)     → panel: Storage & Databases → KV → brote-cache → Namespace ID
-#   3. CF_ACCESS_AUD   → panel: Zero Trust → Access → Applications → Brote →
-#                        Overview → Application Audience (AUD) Tag
+#   1. database_id       → panel: Storage & Databases → D1 → brote → Database ID
+#   2. id (del KV)       → panel: Storage & Databases → KV → brote-cache → Namespace ID
+#   3. GOOGLE_CLIENT_ID  → Google Cloud Console → APIs & Services → Credentials
 #
-# Los secretos NO van acá. El único de la v1 es COHERE_API_KEY, y va en el panel:
-# Workers & Pages → brote → Settings → Variables and Secrets → Add → tipo Secret.
+# Los secretos NO van acá, van en Settings → Variables and Secrets (tipo Secret):
+#   GOOGLE_CLIENT_SECRET   el del cliente OAuth
+#   SESSION_SECRET         openssl rand -base64 48
+#   COHERE_API_KEY         recién con el OCR de tickets
 #
 # Ver DEPLOY.md §10 para el paso a paso desde el panel.
 
@@ -34,12 +35,20 @@ command = "npm ci && npm test && npm run build"
 directory = "./dist/client"
 not_found_handling = "single-page-application"
 
-# Login por Cloudflare Access: no hay client id ni secret de Google acá.
-# CF_ACCESS_TEAM_DOMAIN y CF_ACCESS_AUD son públicos y sirven para validar el JWT.
+# Login propio con Google OAuth 2.0 + PKCE (SDD §7.2), porque sin dominio propio no
+# se puede usar Cloudflare Access: Access solo protege hostnames de una zona activa.
+#
+# APP_URL tiene que ser el origen exacto donde vive el Worker: de ahí sale el
+# redirect_uri (`${APP_URL}/auth/google/callback`), y Google lo compara carácter por
+# carácter con el que cargaste en la consola.
+#
+# El client id es público. Los dos secretos NO van acá:
+#   npx wrangler secret put GOOGLE_CLIENT_SECRET
+#   npx wrangler secret put SESSION_SECRET      # openssl rand -base64 48
+# o en el panel: Settings → Variables and Secrets → tipo Secret.
 [vars]
-APP_URL = "https://brote.example.com"
-CF_ACCESS_TEAM_DOMAIN = "tu-equipo.cloudflareaccess.com"
-CF_ACCESS_AUD = "REEMPLAZAR"
+APP_URL = "https://presupuesto.nicopozza.workers.dev"
+GOOGLE_CLIENT_ID = "REEMPLAZAR"
 DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires"
 IPC_PROJECTED_MONTHLY_PCT = "2.0"
 

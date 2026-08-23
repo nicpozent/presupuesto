@@ -85,6 +85,20 @@ export async function resolveUser(
   return { id: userId, email: claims.email, name: claims.name ?? null, role: null, householdId: null };
 }
 
+/** El usuario de una sesión. Sin claims: la identidad ya se resolvió al entrar. */
+export async function getUserById(db: D1Database, userId: string): Promise<AppUser | null> {
+  const r = await db
+    .prepare(`select id, email, name, role, household_id from users where id = ?1`)
+    .bind(userId)
+    .first<{ id: string; email: string; name: string | null; role: string; household_id: string | null }>();
+  if (!r) return null;
+  return {
+    id: r.id, email: r.email, name: r.name,
+    role: r.household_id ? (r.role as "owner" | "member") : null,
+    householdId: r.household_id,
+  };
+}
+
 export async function listInvites(ctx: HouseholdContext) {
   const { results } = await ctx.db
     .prepare(
