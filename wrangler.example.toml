@@ -1,0 +1,65 @@
+# Brote — configuración de Cloudflare Workers
+# Copiar a wrangler.toml y completar los ids reales.
+# Los secretos NO van acá: wrangler secret put GOOGLE_CLIENT_SECRET
+
+name = "brote"
+main = "src/worker/index.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# La SPA compilada se sirve desde el mismo Worker: sin CORS, sin dominio aparte.
+[assets]
+directory = "./dist/client"
+not_found_handling = "single-page-application"
+
+# Login por Cloudflare Access: no hay client id ni secret de Google acá.
+# CF_ACCESS_TEAM_DOMAIN y CF_ACCESS_AUD son públicos y sirven para validar el JWT.
+[vars]
+APP_URL = "https://brote.example.com"
+CF_ACCESS_TEAM_DOMAIN = "tu-equipo.cloudflareaccess.com"
+CF_ACCESS_AUD = "REEMPLAZAR"
+DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires"
+IPC_PROJECTED_MONTHLY_PCT = "2.0"
+
+# Secretos (wrangler secret put …):
+#   COHERE_API_KEY         tickets (imagen → JSON) y lectura de precios en HTML
+
+[[d1_databases]]
+binding = "DB"
+database_name = "brote"
+database_id = "REEMPLAZAR"
+
+# Cache de datos externos. TTLs en SDD §6.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REEMPLAZAR"
+
+# HTML de páginas de producto, para no pagar dos veces la misma lectura
+[[kv_namespaces]]
+binding = "PAGES"
+id = "REEMPLAZAR"
+
+[[r2_buckets]]
+binding = "RECEIPTS"
+bucket_name = "brote-receipts"
+
+# Sin Queues: el trabajo periódico lo hace el handler scheduled de abajo.
+# Ver DEPLOY.md §5 para los lotes de precios y cuándo conviene migrar a Queues.
+
+# Horarios en UTC. ART = UTC-3.
+# Lotes de precios: cada corrida atiende los N con last_checked_at más viejo.
+[triggers]
+crons = [
+  "0 14 * * *",    # 11:00 ART — cotizaciones BNA + xe
+  "0 */6 * * *",   # cada 6 h — refresco de precios de productos seguidos
+  "0 15 15 * *",   # día 15, 12:00 ART — IPC del INDEC
+  "0 12 * * *"     # 9:00 ART — alertas de vencimientos y bajas de precio
+]
+
+[observability]
+enabled = true
+
+[env.staging]
+name = "brote-staging"
+[env.staging.vars]
+APP_URL = "https://staging.brote.example.com"
