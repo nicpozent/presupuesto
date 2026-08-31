@@ -43,8 +43,13 @@ describe("aislamiento por hogar", () => {
       const src = readFileSync(f, "utf8");
       for (const m of src.matchAll(/export async function (\w+)\(([^)]*)/g)) {
         const [, name, args] = m;
-        // resolveUser es la excepción declarada: corre ANTES de que haya hogar (§7.1.1)
-        if (name === "resolveUser") continue;
+        // Excepciones declaradas y cerradas: las dos corren ANTES de que exista un
+        // HouseholdContext, porque son las que lo construyen. Ninguna lee datos del
+        // hogar —solo la fila de users— así que no pueden filtrar entre hogares.
+        //   resolveUser  → primer ingreso, todavía no hay hogar (§7.1.1)
+        //   getUserById  → el middleware de sesión resuelve al usuario para armar el ctx
+        // Agregar una tercera pide justificarla acá, no ampliar la lista de arriba.
+        if (name === "resolveUser" || name === "getUserById") continue;
         if (!/^\s*ctx\s*:/.test(args)) bad.push(`${rel}:${name}`);
       }
     }

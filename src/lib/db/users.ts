@@ -1,3 +1,4 @@
+import { identityKey } from "../../worker/access.js";
 import type { AnyContext, HouseholdContext } from "./context.js";
 
 export interface AppUser {
@@ -10,21 +11,38 @@ export interface AppUser {
 
 const id = (p: string) => `${p}_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
+/** Nadie que no esté en la lista entra, y no se le crea fila. */
+export class NotAllowed extends Error {
+  constructor(readonly email: string) {
+    super("Ese mail no está habilitado en este hogar");
+    this.name = "NotAllowed";
+  }
+}
+
+const sameEmail = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
 /**
- * Resuelve el usuario del JWT ya validado, creándolo en su primer ingreso.
- * SDD §7.1.1: Access dice quién entra; esto dice a qué hogar pertenece.
+ * Resuelve el usuario del login ya validado, creándolo en su primer ingreso.
  *
- *  1. no hay ningún hogar todavía  → crea el hogar y queda owner
- *  2. hay invitación vigente       → se une a ese hogar como member
- *  3. no hay invitación            → household_id NULL. NO se crea un hogar nuevo.
+ *  1. ya existe                        → se devuelve
+ *  2. no hay hogar y es OWNER_EMAIL    → crea el hogar y queda owner
+ *  3. hay invitación vigente           → se une a ese hogar como member
+ *  4. nada de lo anterior              → NotAllowed. No se crea ninguna fila.
+ *
+ * El caso 2 está anclado a `ownerEmail` a propósito. Con Cloudflare Access esto podía
+ * ser "el primero que entra crea el hogar", porque la policy del borde decidía quién
+ * llegaba. Sin Access, `/auth/google` es una ruta pública de internet: si el hogar lo
+ * creara el primero en entrar, cualquier desconocido que encontrara la URL antes que
+ * el dueño se quedaría con el hogar. Ver SDD §7.2.
  */
 export async function resolveUser(
   db: D1Database,
-  claims: { sub: string; email: string; name?: string },
+  claims: { sub?: string; email: string; name?: string },
+  ownerEmail: string,
 ): Promise<AppUser> {
   const existing = await db
-    .prepare(`select id, email, name, role, household_id from users where google_sub = ?1`)
-    .bind(claims.sub)
+    .prepare(`select id, email, name, role, household_id from users where idp_sub = ?1`)
+    .bind(identityKey(claims))
     .first<{ id: string; email: string; name: string | null; role: string; household_id: string | null }>();
   if (existing) {
     await db.prepare(`update users set last_seen_at = datetime('now') where id = ?1`)
@@ -39,15 +57,15 @@ export async function resolveUser(
   const anyHousehold = await db.prepare(`select id from households limit 1`).first<{ id: string }>();
   const userId = id("u");
 
-  // 1. Primer ingreso de la instalación: se crea el hogar.
-  if (!anyHousehold) {
+  // 2. Primer ingreso de la instalación, y solo el dueño declarado puede hacerlo.
+  if (!anyHousehold && sameEmail(claims.email, ownerEmail)) {
     const hid = id("h");
     await db.batch([
       db.prepare(`insert into households (id, name) values (?1, ?2)`).bind(hid, "Mi casa"),
       db.prepare(
-        `insert into users (id, household_id, google_sub, email, name, role)
+        `insert into users (id, household_id, idp_sub, email, name, role)
            values (?1, ?2, ?3, ?4, ?5, 'owner')`,
-      ).bind(userId, hid, claims.sub, claims.email, claims.name ?? null),
+      ).bind(userId, hid, identityKey(claims), claims.email, claims.name ?? null),
     ]);
     return { id: userId, email: claims.email, name: claims.name ?? null, role: "owner", householdId: hid };
   }
@@ -65,9 +83,9 @@ export async function resolveUser(
   if (invite) {
     await db.batch([
       db.prepare(
-        `insert into users (id, household_id, google_sub, email, name, role)
+        `insert into users (id, household_id, idp_sub, email, name, role)
            values (?1, ?2, ?3, ?4, ?5, 'member')`,
-      ).bind(userId, invite.household_id, claims.sub, claims.email, claims.name ?? null),
+      ).bind(userId, invite.household_id, identityKey(claims), claims.email, claims.name ?? null),
       db.prepare(`update invites set accepted_at = datetime('now') where id = ?1`).bind(invite.id),
     ]);
     return {
@@ -76,12 +94,23 @@ export async function resolveUser(
     };
   }
 
-  // 3. Sin invitación: usuario válido sin hogar. No se le crea uno propio.
-  await db.prepare(
-    `insert into users (id, household_id, google_sub, email, name)
-       values (?1, null, ?2, ?3, ?4)`,
-  ).bind(userId, claims.sub, claims.email, claims.name ?? null).run();
-  return { id: userId, email: claims.email, name: claims.name ?? null, role: null, householdId: null };
+  // 4. Ni dueño ni invitado: no entra y no queda rastro. Sin esto, cualquiera con una
+  //    cuenta de Google podría crear filas en users entrando a /auth/google.
+  throw new NotAllowed(claims.email);
+}
+
+/** El usuario de una sesión. Sin claims: la identidad ya se resolvió al entrar. */
+export async function getUserById(db: D1Database, userId: string): Promise<AppUser | null> {
+  const r = await db
+    .prepare(`select id, email, name, role, household_id from users where id = ?1`)
+    .bind(userId)
+    .first<{ id: string; email: string; name: string | null; role: string; household_id: string | null }>();
+  if (!r) return null;
+  return {
+    id: r.id, email: r.email, name: r.name,
+    role: r.household_id ? (r.role as "owner" | "member") : null,
+    householdId: r.household_id,
+  };
 }
 
 export async function listInvites(ctx: HouseholdContext) {

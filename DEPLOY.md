@@ -123,11 +123,20 @@ npx wrangler secret put COHERE_API_KEY
 
 Repetí con `--env staging`: los secretos no se heredan entre entornos.
 
-**El Worker igual valida el JWT.** Access pone `Cf-Access-Jwt-Assertion` y el
-middleware lo verifica contra `https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`
-chequeando `aud`. Sin esa validación, cualquiera que llegue al Worker por otra ruta
-—un custom domain que no pasó por Access, `workers.dev` sin apagar— entra sin nada.
-Apagá la ruta `workers.dev` del Worker en producción.
+**El Worker igual valida el JWT**, y eso es lo que lo hace fallar cerrado. Access pone
+`Cf-Access-Jwt-Assertion` y el middleware lo verifica contra
+`https://${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs` chequeando `aud`. Por una ruta
+que no pasó por Access el header no llega, así que **todo endpoint de datos responde
+`401`**: medido, no supuesto.
+
+Lo que sí queda expuesto por una ruta así es el cascarón de la SPA —`/` devuelve el
+HTML— y `/api/health`, que es público a propósito. Ningún dato del hogar: el bundle no
+los tiene.
+
+Aun así, **apagá la ruta `workers.dev`** en producción. No porque sea una puerta
+abierta, sino porque es una segunda puerta: el día que alguien agregue un endpoint
+fuera del middleware, ahí queda sin protección, y una sola vía de entrada es más fácil
+de razonar que dos.
 
 **Agregar a alguien al hogar son dos pasos** (`SDD.md` §7.1.1): el mail en la policy
 de Access **y** la invitación en Brote (`POST /api/invites`). Con solo el primero, la
@@ -431,9 +440,27 @@ nombre del Worker y todos los bindings. Está en el repo con tres `REEMPLAZAR`.
 |---|---|---|
 | Base D1 | Storage & Databases → D1 → Create | `brote` |
 | Namespace KV | Storage & Databases → KV → Create | `brote-cache` |
-| Bucket R2 | R2 → Create bucket | `brote-receipts` |
+| Bucket R2 | R2 → Overview → completar el checkout de R2, después Create bucket | `brote-receipts` |
 
 Anotá el **Database ID** de D1 y el **Namespace ID** de KV: van en `wrangler.toml`.
+
+**R2 hay que activarlo antes de crear el bucket.** No alcanza con ir a *Create
+bucket*: primero **R2 → Overview → completar el checkout** que agrega la suscripción de
+R2 a la cuenta. Hasta que eso esté, la API no contesta y el deploy corta con
+
+```
+✘ [ERROR] A request to the Cloudflare API
+          (/accounts/…/r2/buckets/brote-receipts) failed
+```
+
+que desconcierta porque nombra un recurso que la app todavía no usa. El
+`bucket_name` de `wrangler.toml` tiene que coincidir exacto con el nombre del bucket.
+
+El tramo gratuito de R2 son 10 GB, 1 millón de operaciones de escritura y 10 millones
+de lectura por mes, con egress gratis. Un hogar con treinta tickets por mes de 2 MB usa
+60 MB por mes: **catorce años de almacenamiento y el 0,003% de las escrituras.** Por eso
+las fotos van a R2 y no a D1, donde el límite de 2 MB por fila no las aceptaría y los
+500 MB de la base se los comerían compitiendo con los movimientos.
 
 ### 10.2 Cargar el esquema
 
@@ -466,7 +493,23 @@ Son **dos cosas distintas** y en este orden:
    - Authorized redirect URI: `https://<tu-equipo>.cloudflareaccess.com/cdn-cgi/access/callback`
 
    Con el Client ID y el Client Secret: Zero Trust → **Integrations → Identity
-   providers** → Add new → Google.
+   providers** → Add new → **Google** (no *Google Workspace*: ese pide un dominio
+   administrado y un admin).
+
+   **Anda con una cuenta de Gmail común.** Dos elecciones lo definen:
+   - En la pantalla de consentimiento, **External**, no Internal. *Internal* solo
+     existe para proyectos atados a una organización de Google Cloud; *External* es
+     "cualquiera con una cuenta de Google", que incluye `@gmail.com`.
+   - Conviene apretar **Publish app** para pasar a *In production*. Los scopes que pide
+     Access —`openid email profile`— no son sensibles y no necesitan verificación, y
+     publicando te saca de encima el límite de 100 usuarios de prueba y el
+     consentimiento que vence a los 7 días del modo *Testing*.
+
+   **"External" y "In production" no abren Brote al mundo.** Google solo dice quién es
+   la persona. Quién entra lo decide la policy de Access del punto 2: cualquiera puede
+   autenticarse con Google y quedar afuera igual. Y el Worker valida el `aud` del token
+   contra esta aplicación, así que un token de otra no sirve. La lista corta es la de
+   Access, en un solo lugar.
 2. **La aplicación**: Zero Trust → **Access controls → Applications** → Create new
    application → *Self-hosted and private* → Add public hostname, el hostname de Brote,
    y una policy *Allow* con los mails del hogar en `Emails`.
@@ -534,6 +577,15 @@ código.
 
 `npm run build` corre `tsc --noEmit && vite build`: si algo no tipa, el build falla y
 no se despliega. Es a propósito, igual que poner `npm test` adelante.
+
+**Las 5 vulnerabilidades que reporta `npm ci` en el build son de
+`devDependencies`** —`vitest`, `vite`, `esbuild`— y las tres son del servidor de
+desarrollo: la UI de vitest escuchando, el dev server de vite, el dev server de
+esbuild. **Nada de eso viaja al Worker**, que recibe el código compilado y los assets.
+Limpiarlas necesita saltar a `vitest@3` y `vite@7`, que hoy choca por peer
+dependencies; no vale la pena tocar la cadena de build para bajar un número que no
+tiene exposición en producción. Queda anotado y se hace cuando haya que actualizar el
+toolchain igual.
 
 **Orden recomendado (B).** El `CF_ACCESS_AUD` sale de la aplicación de Access, y la
 aplicación es más fácil de crear cuando el hostname ya existe en el DNS. Entonces:

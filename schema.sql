@@ -26,7 +26,11 @@ CREATE TABLE users (
   -- NULL a propósito: un usuario que pasó Access pero todavía no fue invitado a
   -- ningún hogar es un estado válido. Ver SDD §7.1.1.
   household_id TEXT REFERENCES households(id) ON DELETE CASCADE,
-  google_sub   TEXT NOT NULL UNIQUE,        -- identidad estable, no el email
+  -- Identidad estable del proveedor, no el email. Con un IdP OIDC (Google) es el
+  -- claim 'sub' del token; con One-time PIN, donde no hay sub, es el email, que ahí
+  -- ES la identidad. Se llama idp_sub y no google_sub porque el proveedor es una
+  -- decisión de despliegue, no del esquema. Ver SDD §7.1.
+  idp_sub      TEXT NOT NULL UNIQUE,
   email        TEXT NOT NULL,
   name         TEXT,
   avatar_url   TEXT,
@@ -36,8 +40,19 @@ CREATE TABLE users (
 );
 CREATE INDEX idx_users_household ON users(household_id);
 
--- No hay tabla de sesiones: el login lo resuelve Cloudflare Access y cada request
--- trae su propio JWT, validado contra el JWKS del equipo. Ver SDD §7.1.
+-- Sesión propia. Con Access no hacía falta —cada request traía su JWT— pero sin
+-- dominio propio no hay Access, así que el login vive en el Worker (SDD §7.2): la
+-- cookie lleva el id firmado con HMAC y esta fila permite revocar.
+CREATE TABLE sessions (
+  id          TEXT PRIMARY KEY,             -- id opaco; la cookie lleva id + HMAC
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at  TEXT NOT NULL,
+  user_agent  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+CREATE INDEX idx_sessions_expiry ON sessions(expires_at);
+
 
 -- Access decide quién llega a la app; esta tabla decide a qué hogar pertenece.
 -- Sin invitación, un mail nuevo que pasa Access queda con household_id NULL y no

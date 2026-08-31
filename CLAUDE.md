@@ -22,7 +22,9 @@ se recrean los diseños.
   alertas corren en el handler `scheduled`. Precios por lotes de 40 ordenados por
   `last_checked_at`, con `Promise.allSettled` y timeout por comercio. El OCR de
   tickets va en el request, no diferido. Ver `DEPLOY.md` §5.
-- **Auth**: Cloudflare Access con Google como IdP. El Worker valida el JWT
+- **Auth**: Cloudflare Access. El proveedor de identidad es una decisión de
+  despliegue —Google, o el One-time PIN de Access para un hogar chico— y el código no
+  cambia: la identidad estable se guarda en `users.idp_sub`. El Worker valida el JWT
   `Cf-Access-Jwt-Assertion` contra el JWKS del equipo en cada request. No hay flujo
   OAuth propio, no hay tabla `sessions`. Ver `SDD.md` §7.1.
 - **IA**: Cohere. Un solo proveedor para dos usos — leer tickets (imagen → JSON) y

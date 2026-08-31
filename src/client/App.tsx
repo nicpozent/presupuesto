@@ -7,6 +7,7 @@ interface Me {
 
 type State =
   | { kind: "loading" }
+  | { kind: "anon" }
   | { kind: "ready"; me: Me }
   | { kind: "error"; message: string };
 
@@ -24,6 +25,7 @@ export function App() {
   useEffect(() => {
     fetch("/api/me")
       .then(async (r) => {
+        if (r.status === 401) return null;   // no entró todavía, no es un error
         if (!r.ok) {
           const body = (await r.json().catch(() => null)) as
             | { error?: { message?: string } }
@@ -32,7 +34,7 @@ export function App() {
         }
         return r.json() as Promise<Me>;
       })
-      .then((me) => setState({ kind: "ready", me }))
+      .then((me) => setState(me ? { kind: "ready", me } : { kind: "anon" }))
       .catch((e: Error) => setState({ kind: "error", message: e.message }));
   }, []);
 
@@ -54,6 +56,28 @@ export function App() {
       </h1>
 
       {state.kind === "loading" && <p style={{ color: "var(--color-neutral-700)" }}>Cargando…</p>}
+
+      {/* 401 no es un error: es "todavía no entraste". SDD §7.2 */}
+      {state.kind === "anon" && (
+        <div style={card}>
+          <h2 style={{ fontSize: 21, marginBottom: 6 }}>Entrá para ver tu mes</h2>
+          <p style={{ color: "var(--color-neutral-700)" }}>
+            Brote usa tu cuenta de Google solo para saber quién sos. No pide acceso a tu
+            correo ni a tus archivos.
+          </p>
+          <a
+            href="/auth/google"
+            style={{
+              display: "inline-flex", alignItems: "center", minHeight: 48,
+              padding: "0 22px", borderRadius: 999, textDecoration: "none",
+              background: "var(--color-accent)", color: "var(--on-accent)",
+              fontWeight: 700, fontSize: "15.5px",
+            }}
+          >
+            Entrar con Google
+          </a>
+        </div>
+      )}
 
       {state.kind === "error" && (
         <div style={card}>
